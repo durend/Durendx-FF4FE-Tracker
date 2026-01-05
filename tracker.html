@@ -1,0 +1,2062 @@
+<html>
+	<body bgcolor="#000063">
+		<head>
+			<title>FFIV Free Enterprise Tracker V3 - By Durendx</title>
+			<link rel="stylesheet" href="./styles/stylesheet.css?v=2316">
+			<link rel="stylesheet" href="./styles/tracker_v2.css">
+			<script src="./scripts/enums.js?v=2316"></script>
+			<script src="./scripts/items.js?v=2316"></script>
+			<script type="text/javascript">
+			// Initialize tracker disable flags BEFORE track.js loads
+			var disableitemtracker = '0';
+			var disableloctracker = '0';
+			var disablebosstracker = '0';
+			var disablelocationtracker = '0';
+			var disablecurrentparty = '0';
+			var disableobjectivetracker = '0';
+			var disablecharacterstracker = '0';  // Character locations tracker
+			</script>
+			<script src="./scripts/track.js?v=2340"></script>
+			<script type="text/javascript" src="./scripts/jquery-3.3.1.js"></script>
+			<script type="text/javascript" src="./scripts/jquery.powertip.js"></script>
+			<link rel="stylesheet" type="text/css" href="./styles/jquery.powertip.css" />
+			<script src="./scripts/usb2snes.js"></script>
+			<script src="./scripts/network.js"></script>
+			<script src="./scripts/tracking_interface.js"></script>
+
+			<script type="text/javascript">
+			let ti = new tracking_interface();
+
+			let ki_map = {
+				0x00: KeyItem.PACKAGE,
+				0x01: KeyItem.SANDRUBY,
+				0x02: KeyItem.LEGEND,
+				0x03: KeyItem.BARON_KEY,
+				0x04: KeyItem.TWINHARP,
+				0x05: KeyItem.EARTH_CRYSTAL,
+				0x06: KeyItem.MAGMA_KEY,
+				0x07: KeyItem.TOWER_KEY,
+				0x08: KeyItem.HOOK,
+				0x09: KeyItem.LUCA_KEY,
+				0x0A: KeyItem.DARKNESS_CRYSTAL,
+				0x0B: KeyItem.RAT_TAIL,
+				0x0C: KeyItem.ADAMANT,
+				0x0D: KeyItem.PAN,
+				0x0E: KeyItem.SPOON,
+				0x0F: KeyItem.PINK_TAIL,
+				0x10: KeyItem.CRYSTAL,
+				0x11: KeyItem.PASS
+			}
+
+			let ki_location_map = {
+				0x002E: KeyItemCheck.ADAMANT,
+				0x0021: KeyItemCheck.ANTLION,
+				0x0025: KeyItemCheck.BARON_KING,
+				0x0024: KeyItemCheck.BARON_INN,
+				0x0033: KeyItemCheck.BARON_ODIN,
+				0x0022: KeyItemCheck.FABUL_DEFEND,
+				0x002F: KeyItemCheck.FABUL_SYLPH,
+				0x0030: KeyItemCheck.FABUL_PAN,
+				0x0027: KeyItemCheck.MAGNES,
+				0x0059: KeyItemCheck.MIST,
+				0x0023: KeyItemCheck.MT_ORDEALS,
+				0x0026: KeyItemCheck.TOROIA,
+				0x0028: KeyItemCheck.TOWER_ZOT,
+				0x002B: KeyItemCheck.DWARF,
+				0x002D: KeyItemCheck.FEY_CHEST,
+				0x0031: KeyItemCheck.FEY_ASURA,
+				0x0032: KeyItemCheck.FEY_LEVIATHAN,
+				0x0029: KeyItemCheck.LOWER_BABIL_BOSS,
+				0x002A: KeyItemCheck.LOWER_BABIL_CANNON,
+				0x002C: KeyItemCheck.SEALED_CAVE,
+				0x0034: KeyItemCheck.SYLPH_CAVE,
+				0x0035: KeyItemCheck.BAHAMUT,
+				0x0037: KeyItemCheck.MOON_CRYSTAL,
+				0x0036: KeyItemCheck.MOON_MURASAME,
+				0x003B: KeyItemCheck.MOON_MASAMUNE,
+				0x0039: KeyItemCheck.MOON_RIBBON,
+				0x003A: KeyItemCheck.MOON_RIBBON,
+				0x0038: KeyItemCheck.MOON_WHITE
+			}
+
+			let character_location_map = {
+				0x0E: CharacterCheck.BARON_CASTLE,
+				0x0D: CharacterCheck.BARON_INN,
+				0x05: CharacterCheck.DAMCYAN,
+				0x12: CharacterCheck.EBLAN_CAVE,
+				0x14: CharacterCheck.GIANT_BABIL,
+				0x06: CharacterCheck.KAIPO,
+				0x03: CharacterCheck.MIST,
+				0x07: CharacterCheck.MT_HOBS,
+				0x0A: CharacterCheck.MT_ORDEALS,
+				0x08: CharacterCheck.MYSIDIA,
+				0x09: CharacterCheck.MYSIDIA,
+				0x0F: CharacterCheck.TOWER_ZOT,
+				0x10: CharacterCheck.TOWER_ZOT,
+				0x04: CharacterCheck.WATERWAY,
+				0x11: CharacterCheck.DWARF,
+				0x13: CharacterCheck.MOON
+			}
+
+			// Debounce timer for ApplyChecks to prevent race conditions
+			let applyChecksTimer = null;
+
+			// Stability tracking for character locations
+			// Track how many consecutive times each location flag has been TRUE
+			let characterLocationStability = {};
+			const STABILITY_THRESHOLD = 5; // Must be true for 5 cycles (500ms) before marking complete
+
+			// Stability tracking for key items to prevent flicker from memory reads
+			let keyItemStability = {};
+			const KI_STABILITY_THRESHOLD = 3; // Must be stable for 3 cycles (300ms) before accepting change
+			let bypassStabilityUntil = Date.now() + 3000; // Bypass stability for 3 seconds after page load
+			let changesThisCycle = 0;
+			let cycleResetTimer = null;
+
+			// Force clear all tracker state
+			function resetTrackerState() {
+				// Reset key items
+				for (let i = 0; i < keyitems.length; i++) {
+					keyitems[i] = false;
+				}
+				// Reset used key items
+				for (let i = 0; i < usedkeyitems.length; i++) {
+					usedkeyitems[i] = false;
+				}
+				// Reset objectives (mark all as hidden)
+				for (let i = 0; i < objectives.length; i++) {
+					objectives[i] = 2;
+				}
+				// Reset boss count
+				if (typeof bosscount !== 'undefined') {
+					bosscount = 0;
+					document.getElementById('bosscountspan').innerHTML = '0';
+				}
+				// Trigger full refresh
+				bypassStabilityUntil = Date.now() + 5000;
+				keyItemStability = {};
+				if (applyChecksTimer) clearTimeout(applyChecksTimer);
+				applyChecksTimer = setTimeout(ApplyChecks, 100);
+			}
+
+			// Detection function - currently disabled to allow full tracking
+			function isAtMenuWithStaleData() {
+				return false; // Disabled - tracker follows ROM exactly
+			}
+
+			// Autotracking callback functions
+			ti.auto_set_ki = (slot, value) => {
+			  let itemId = ki_map[slot];
+			  keyitems[itemId] = value;
+			  if (applyChecksTimer) clearTimeout(applyChecksTimer);
+			  applyChecksTimer = setTimeout(ApplyChecks, 50);
+			}
+
+			ti.auto_set_used_ki = (slot, value) => {
+			  usedkeyitems[ki_map[slot]] = value;
+			}
+
+			ti.auto_set_loc_ki = (slot, value) => {
+			  if (ki_location_map[slot] !== undefined) {
+					var locationId = ki_location_map[slot];
+					// Always follow ROM - no protection
+					keyitemlocations[locationId] = value ? 2 : 0;
+					if (applyChecksTimer) clearTimeout(applyChecksTimer);
+					applyChecksTimer = setTimeout(() => {
+						ApplyChecks();
+						if (typeof applyV2LocationStyling === 'function') {
+							applyV2LocationStyling();
+						}
+					}, 50);
+				}
+			}
+
+			ti.auto_set_loc_character = (slot, value) => {
+			  // Ignore character locations if Cnoearned flag is set
+			  if (typeof modeflags !== 'undefined' && modeflags.cnoearned) {
+			    return; // Don't track earned character locations
+			  }
+
+			  if (character_location_map[slot] !== undefined) {
+					var locationId = character_location_map[slot];
+					// Always follow ROM - no protection
+					characterlocations[locationId] = value ? 2 : 0;
+					if (applyChecksTimer) clearTimeout(applyChecksTimer);
+					applyChecksTimer = setTimeout(() => {
+						ApplyChecks();
+						if (typeof applyV2LocationStyling === 'function') {
+							applyV2LocationStyling();
+						}
+					}, 50);
+				}
+			}
+
+			ti.set_boss_count = (count) => {
+			  if (typeof bosscount !== 'undefined') {
+					bosscount = count;
+					document.getElementById('bosscountspan').innerHTML = count;
+
+					// Check if there's a "Defeat X bosses" objective and mark it complete if target reached
+					if (ti && ti.objectives) {
+						for (let i = 0; i < ti.objectives.length; i++) {
+							let bossMatch = ti.objectives[i].match(/Defeat (\d+) bosses/i);
+							if (bossMatch) {
+								let target = parseInt(bossMatch[1]);
+								let objectiveIndex = objectivenames.indexOf(ti.objectives[i]);
+								if (objectiveIndex !== -1 && typeof objectives !== 'undefined') {
+									// Mark as complete if we've reached the target
+									if (count >= target) {
+										objectives[objectiveIndex + 4] = 1;
+									} else {
+										objectives[objectiveIndex + 4] = 0;
+									}
+								}
+							}
+						}
+					}
+
+					// Update objectives list to show boss counter next to boss objective
+					updateObjectivesList();
+			  }
+			}
+
+			// Persistent party slot assignment system
+			// Tracks which character occupies each tracker slot (not their in-game position)
+			window.trackerPartySlots = [-1, -1, -1, -1, -1]; // Character ID in each tracker slot
+			window.trackerPartyForms = [false, false, false, false, false]; // Alt form tracking per slot
+
+			// Find first available tracker slot
+			function findAvailableTrackerSlot() {
+				let limit = (typeof modeflags !== 'undefined' && modeflags.climit) ? modeflags.climit : 5;
+				for (let i = 0; i < limit; i++) {
+					if (window.trackerPartySlots[i] === -1) {
+						return i;
+					}
+				}
+				return -1; // No available slots
+			}
+
+			// Find which tracker slot contains a character
+			function findTrackerSlotForCharacter(charId) {
+				for (let i = 0; i < 5; i++) {
+					if (window.trackerPartySlots[i] === charId) {
+						return i;
+					}
+				}
+				return -1;
+			}
+
+			// Check if character is allowed (handles cnodupes flag)
+			function isCharacterAllowed(charId) {
+				if (typeof modeflags === 'undefined' || !modeflags.cnodupes) {
+					return true; // Duplicates allowed
+				}
+				// Check if this character already exists in tracker
+				return findTrackerSlotForCharacter(charId) === -1;
+			}
+
+			// Update tracker party display
+			function updateTrackerPartyDisplay(slotIndex) {
+				if (slotIndex < 0 || slotIndex >= 5) return;
+
+				let partyElement = document.getElementById('party' + slotIndex);
+				let charId = window.trackerPartySlots[slotIndex];
+				let isAltForm = window.trackerPartyForms[slotIndex];
+
+				if (charId === -1) {
+					partyElement.style.backgroundImage = 'none';
+				} else {
+					let imageName = 'character' + charId + '_a.png';
+					if (charId === 0) {
+						imageName = isAltForm ? 'character0_2_a.png' : 'character0_a.png';
+					} else if (charId === 2) {
+						imageName = isAltForm ? 'character2_2_a.png' : 'character2_a.png';
+					}
+					partyElement.style.backgroundImage = 'url("images/' + imageName + '")';
+				}
+			}
+
+			ti.set_character = (charId, hasCharacter, isAltForm, partySlot) => {
+			  console.log(`🔧 set_character: charId=${charId}, hasChar=${hasCharacter}, altForm=${isAltForm}, slot=${partySlot}`);
+			  if (typeof characters !== 'undefined') {
+					// Mark character as acquired
+					if (charId >= 0) {
+						characters[charId] = hasCharacter;
+						if (hasCharacter) {
+							document.getElementById('character' + charId + '_x').style.visibility = 'visible';
+						}
+					}
+
+					// Still update partymembers for compatibility
+					if (partySlot !== undefined && partySlot >= 0 && partySlot < 5) {
+						partymembers[partySlot] = charId;
+					}
+
+					// Handle empty slot signal (charId === -1) - triggered when party composition changes
+					if (charId === -1 && !hasCharacter && partySlot !== undefined && partySlot >= 0 && partySlot < 5) {
+						console.log(`🧹 Empty slot signal for game slot ${partySlot} - scheduling cleanup`);
+						// This game slot is now empty - clear any tracker slot that matches it
+						// Defer cleanup slightly to allow all character updates to complete first
+						if (window.partyCleanupTimer) clearTimeout(window.partyCleanupTimer);
+						window.partyCleanupTimer = setTimeout(() => {
+							// Build set of current party character IDs
+							let currentPartySet = new Set();
+							for (let i = 0; i < 5; i++) {
+								if (partymembers[i] !== -1) {
+									currentPartySet.add(partymembers[i]);
+								}
+							}
+							// Clear tracker slots for characters no longer in party
+							for (let i = 0; i < 5; i++) {
+								if (window.trackerPartySlots[i] !== -1 && !currentPartySet.has(window.trackerPartySlots[i])) {
+									console.log(`Clearing tracker slot ${i} (char ${window.trackerPartySlots[i]}) - not in current party`);
+									window.trackerPartySlots[i] = -1;
+									window.trackerPartyForms[i] = false;
+									updateTrackerPartyDisplay(i);
+								}
+							}
+						}, 100); // Wait 100ms for all party updates to complete
+						return; // Don't process further for empty slots
+					}
+
+					// PERSISTENT SLOT ASSIGNMENT LOGIC
+					if (charId >= 0 && hasCharacter) {
+						// Character is joining party
+						let existingSlot = findTrackerSlotForCharacter(charId);
+
+						if (existingSlot !== -1) {
+							// Character already in tracker - DON'T update form (protection)
+							// Form is set when character first joins and doesn't change from ROM
+							// (User can manually click to change Cecil/Rydia forms)
+						} else if (isCharacterAllowed(charId)) {
+							// New character - find slot
+							let availableSlot = findAvailableTrackerSlot();
+
+							if (availableSlot !== -1) {
+								// Empty slot available - assign
+								window.trackerPartySlots[availableSlot] = charId;
+								// For Cecil and Rydia, default to base form (don't use ROM)
+								window.trackerPartyForms[availableSlot] = false;
+								updateTrackerPartyDisplay(availableSlot);
+							} else {
+								// Party full - find who left and replace them
+								// Build current party from game memory (partymembers)
+								let currentParty = new Set();
+								for (let i = 0; i < 5; i++) {
+									if (partymembers[i] !== -1) {
+										currentParty.add(partymembers[i]);
+									}
+								}
+
+								// Find which tracker character is no longer in party
+								let limit = (typeof modeflags !== 'undefined' && modeflags.climit) ? modeflags.climit : 5;
+								for (let i = 0; i < limit; i++) {
+									if (window.trackerPartySlots[i] !== -1 && !currentParty.has(window.trackerPartySlots[i])) {
+										// This character left - replace with new one
+										window.trackerPartySlots[i] = charId;
+										// For Cecil and Rydia, default to base form (don't use ROM)
+										window.trackerPartyForms[i] = false;
+										updateTrackerPartyDisplay(i);
+										break;
+									}
+								}
+							}
+						}
+
+						// Handle Cecil/Rydia forms
+						if (charId === 0) {
+							cecil = isAltForm;
+						} else if (charId === 2) {
+							rydia = isAltForm;
+							// Auto-complete Dwarf Castle if Adult Rydia appears
+							if (isAltForm && typeof characterlocations !== 'undefined' && typeof CharacterCheck !== 'undefined') {
+								if (characterlocations[CharacterCheck.DWARF] === 1) {
+									characterlocations[CharacterCheck.DWARF] = 2;
+									ApplyChecks();
+									if (typeof applyV2LocationStyling === 'function') {
+										applyV2LocationStyling();
+									}
+								}
+							}
+						}
+					}
+			  }
+			}
+
+			ti.set_hook_route = (cleared) => {
+			  if (typeof hookclear !== 'undefined') {
+					hookclear = cleared;
+					// Debounce ApplyChecks to prevent race conditions
+					if (applyChecksTimer) clearTimeout(applyChecksTimer);
+					applyChecksTimer = setTimeout(ApplyChecks, 50);
+			  }
+			}
+
+			ti.apply_checks = () => {
+				if (typeof ApplyChecks === 'function') {
+					ApplyChecks();
+				}
+			}
+
+			// Objectives handling
+			function resetObjectives() {
+				for (let i=4; i < 98; i++) {
+					objectives[i] = 2;
+				}
+			}
+
+			ti.auto_set_live_objectives = (values) => {
+				resetObjectives();
+				for (let i=0; i < values.length; i++) {
+				  let objectiveIndex = objectivenames.indexOf(values[i]);
+				  if (objectiveIndex !== -1) {
+				    objectives[objectiveIndex+4] = 0;
+				  }
+				}
+				updateObjectivesList();
+			}
+
+			// Store ki objective targets for dynamic checking
+			let kiObjectiveTargets = {};
+
+			ti.auto_set_objective = (slot, value) => {
+				let index = objectivenames.indexOf(slot);
+
+				// If not found, try fuzzy matching for common variations
+				if (index === -1) {
+					// Try matching without "the" articles
+					let slotWithoutThe = slot.replace(/\bthe\b/gi, '').replace(/\s+/g, ' ').trim();
+					for (let i = 0; i < objectivenames.length; i++) {
+						let objWithoutThe = objectivenames[i].replace(/\bthe\b/gi, '').replace(/\s+/g, ' ').trim();
+						if (slotWithoutThe.toLowerCase() === objWithoutThe.toLowerCase()) {
+							index = i;
+							break;
+						}
+					}
+				}
+
+				// Handle special "Obtain X key items" objectives
+				let kiMatch = slot.match(/Obtain (\d+) key items/i);
+				if (index === -1 && kiMatch) {
+					// Store this for dynamic checking
+					kiObjectiveTargets[slot] = parseInt(kiMatch[1]);
+					return; // Don't try to set a specific objective index
+				}
+
+				if (index > -1) {
+					let oldState = objectives[index+4];
+					// Always follow ROM - no protection
+					objectives[index+4] = value ? 1 : 0;
+					if (oldState !== objectives[index+4] && objectives[index+4] === 1) {
+						console.warn(`✅ OBJECTIVE COMPLETED: "${slot}"`);
+					}
+					updateObjectivesList();
+				}
+			}
+
+			// Manual objectives array for manual tracker mode
+			let manualObjectives = [];
+			let manualObjectivesCompleted = [];
+
+			// Generated objectives completion tracking
+			let generatedObjectivesCompleted = [];
+
+			// Format objective names from flag format to display format
+			function formatObjectiveName(name) {
+				// Handle different objective types
+				if (name.startsWith('boss_')) {
+					// boss_golbez -> Defeat Golbez
+					// boss_fabulgauntlet -> Defeat Fabul Gauntlet
+					let bossName = name.substring(5);
+
+					// Add space before capital letters (for camelCase)
+					bossName = bossName.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+					// Handle known multi-word boss names
+					bossName = bossName.replace(/fabulgauntlet/gi, 'Fabul Gauntlet');
+					bossName = bossName.replace(/mirrorcecil/gi, 'Dark Knight Cecil');
+
+					// Replace underscores and title case
+					bossName = bossName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+					return 'Defeat ' + bossName;
+				} else if (name.startsWith('quest_')) {
+					// quest_cavebahamut -> Cave Of Bahamut
+					let questName = name.substring(6).replace(/cave/gi, 'Cave of ').replace(/tower/gi, 'Tower of ').replace(/_/g, ' ');
+					return questName.replace(/\b\w/g, l => l.toUpperCase());
+				} else if (name.startsWith('char_')) {
+					// char_cecil -> Get Cecil
+					let charName = name.substring(5).replace(/_/g, ' ');
+					return 'Get ' + charName.replace(/\b\w/g, l => l.toUpperCase());
+				} else {
+					// Default: just title case and replace underscores
+					return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+				}
+			}
+
+			// Generate objectives from parsed modeflags
+			function generateObjectivesFromFlags() {
+				let generatedObjectives = [];
+
+				// Boss Collector
+				if (typeof modeflags !== 'undefined' && modeflags.obosscollector && modeflags.obosscollectorcount) {
+					generatedObjectives.push(`Defeat ${modeflags.obosscollectorcount} Bosses`);
+				}
+
+				// Gold Hunter
+				if (typeof modeflags !== 'undefined' && modeflags.ogoldhunter && modeflags.ogoldhuntercount) {
+					generatedObjectives.push(`Collect ${modeflags.ogoldhuntercount} Gold`);
+				}
+
+				// Add objectives from objectiveGroups (parsed from Omode flags)
+				if (typeof objectiveGroups !== 'undefined') {
+					for (let groupKey in objectiveGroups) {
+						let group = objectiveGroups[groupKey];
+						if (group.objectives && group.objectives.length > 0) {
+							for (let obj of group.objectives) {
+								// Convert objective name to display format
+								let displayName = formatObjectiveName(obj.name);
+								generatedObjectives.push(displayName);
+							}
+						}
+					}
+				}
+
+				return generatedObjectives;
+			}
+
+			window.updateObjectivesList = function() {
+				const objectivesDiv = document.getElementById('objectiveslist');
+				const objectiveCounter = document.getElementById('objectivecounter');
+
+				if (!objectivesDiv || !objectiveCounter) return;
+
+				let completedCount = 0;
+				let totalCount = 0;
+				objectivesDiv.innerHTML = '';
+
+				// Check if we should use auto-generated objectives from flags
+				// ONLY use generated objectives in manual mode (when ti.objectives doesn't exist from ROM)
+				let generatedObjs = generateObjectivesFromFlags();
+				let useGeneratedObjectives = generatedObjs.length > 0 && (!ti || !ti.objectives || ti.objectives.length === 0);
+
+				// Add flag-based objectives if they exist (auto-tracking mode)
+				if (useGeneratedObjectives) {
+					// Use auto-generated objectives from parsed flags
+					for (let i = 0; i < generatedObjs.length; i++) {
+						let objItem = document.createElement('div');
+						objItem.id = 'objective' + i;
+						objItem.className = 'objective-item';
+
+						// Check if this objective requires a count
+						let bossMatch = generatedObjs[i].match(/Defeat (\d+) [Bb]osses?/i);
+						let goldMatch = generatedObjs[i].match(/Collect (\d+) [Gg]old/i);
+
+						if (bossMatch || goldMatch) {
+							// Create container for objective with counter controls
+							let objText = document.createElement('span');
+							objText.className = 'objective-text';
+							objText.textContent = generatedObjs[i];
+							objText.onclick = () => toggleGeneratedObjective(i);
+
+							let counterControls = document.createElement('span');
+							counterControls.className = 'counter-controls';
+
+							let downArrow = document.createElement('button');
+							downArrow.className = 'counter-btn';
+							downArrow.textContent = '▼';
+							downArrow.onclick = (e) => {
+								e.stopPropagation();
+								if (bossMatch) BossTicker(-1);
+								else if (goldMatch) GoldTicker(-1);
+								updateObjectivesList();
+							};
+
+							let countDisplay = document.createElement('span');
+							countDisplay.className = 'counter-display';
+							if (bossMatch) {
+								let target = parseInt(bossMatch[1]);
+								countDisplay.textContent = `${bosscount}/${target}`;
+							} else if (goldMatch) {
+								let target = parseInt(goldMatch[1]);
+								countDisplay.textContent = `${goldcount}/${target}`;
+							}
+
+							let upArrow = document.createElement('button');
+							upArrow.className = 'counter-btn';
+							upArrow.textContent = '▲';
+							upArrow.onclick = (e) => {
+								e.stopPropagation();
+								if (bossMatch) BossTicker(1);
+								else if (goldMatch) GoldTicker(1);
+								updateObjectivesList();
+							};
+
+							counterControls.appendChild(downArrow);
+							counterControls.appendChild(countDisplay);
+							counterControls.appendChild(upArrow);
+
+							objItem.appendChild(objText);
+							objItem.appendChild(counterControls);
+
+							// Check completion: auto-complete if count reached OR manually toggled
+							if ((bossMatch && bosscount >= parseInt(bossMatch[1])) ||
+							    (goldMatch && goldcount >= parseInt(goldMatch[1])) ||
+							    generatedObjectivesCompleted[i]) {
+								objItem.classList.add('completed');
+								completedCount++;
+							}
+						} else {
+							// Regular objective without counter
+							objItem.textContent = generatedObjs[i];
+							objItem.onclick = () => toggleGeneratedObjective(i);
+
+							// Check if manually completed
+							if (generatedObjectivesCompleted[i]) {
+								objItem.classList.add('completed');
+								completedCount++;
+							}
+						}
+
+						objectivesDiv.appendChild(objItem);
+						totalCount++;
+					}
+				} else if (ti && ti.objectives && ti.objectives.length > 0) {
+					for (let i = 0; i < ti.objectives.length; i++) {
+					let objItem = document.createElement('div');
+					objItem.id = 'objective' + i;
+					objItem.className = 'objective-item';
+
+					// Check if this is a boss counter objective (e.g., "Defeat 20 bosses")
+					let bossMatch = ti.objectives[i].match(/Defeat (\d+) [Bb]osses?/i);
+
+					if (bossMatch) {
+						// Boss counter objective - add counter display
+						let target = parseInt(bossMatch[1]);
+						objItem.textContent = ti.objectives[i] + ' (' + (bosscount || 0) + '/' + target + ')';
+					} else {
+						// Not a boss counter objective - just show the objective name
+						objItem.textContent = ti.objectives[i];
+					}
+
+					objItem.onclick = () => SwapObjective(i);
+
+					// Check if objective is complete
+					let isComplete = false;
+
+					// Check for "Defeat X bosses" objectives first
+					if (bossMatch) {
+						let target = parseInt(bossMatch[1]);
+						if (bosscount >= target) {
+							isComplete = true;
+						}
+					}
+					// Check for "Obtain X key items" objectives
+					else if (ti.objectives[i].match(/Obtain (\d+) key items/i)) {
+						let kiMatch = ti.objectives[i].match(/Obtain (\d+) key items/i);
+						let target = parseInt(kiMatch[1]);
+						// Calculate current key item count directly from keyitems array
+						let currentKICount = 0;
+						if (typeof keyitems !== 'undefined') {
+							for (let k = 0; k < keyitems.length; k++) {
+								if (keyitems[k] === true || keyitems[k] === 1) {
+									currentKICount++;
+								}
+							}
+						}
+						if (currentKICount >= target) {
+							isComplete = true;
+						}
+					} else {
+						// Check regular objectives with fuzzy matching
+						let objectiveIndex = objectivenames.indexOf(ti.objectives[i]);
+
+						// If not found, try fuzzy matching
+						if (objectiveIndex === -1) {
+							let slotWithoutThe = ti.objectives[i].replace(/\bthe\b/gi, '').replace(/\s+/g, ' ').trim();
+							for (let j = 0; j < objectivenames.length; j++) {
+								let objWithoutThe = objectivenames[j].replace(/\bthe\b/gi, '').replace(/\s+/g, ' ').trim();
+								if (slotWithoutThe.toLowerCase() === objWithoutThe.toLowerCase()) {
+									objectiveIndex = j;
+									break;
+								}
+							}
+						}
+
+						if (objectiveIndex !== -1) {
+							if (objectives[objectiveIndex + 4] === 1) {
+								isComplete = true;
+							}
+						}
+					}
+
+					if (isComplete) {
+						objItem.classList.add('completed');
+						completedCount++;
+					}
+
+					objectivesDiv.appendChild(objItem);
+					totalCount++;
+				}
+			}
+
+			// Always add manual objectives underneath generated/ROM objectives if they exist
+			if (manualObjectives.length > 0) {
+				// Add manual objectives (these appear below flag-based objectives)
+				for (let i = 0; i < manualObjectives.length; i++) {
+					let objItem = document.createElement('div');
+					objItem.id = 'manualobjective' + i;
+					objItem.className = 'objective-item';
+
+					// Check if this objective requires a count
+					let bossMatch = manualObjectives[i].match(/Defeat (\d+) [Bb]osses?/i);
+					let goldMatch = manualObjectives[i].match(/Collect (\d+) [Gg]old/i);
+					let dmMatch = manualObjectives[i].match(/Collect (\d+) [Dd]ark [Mm]atter/i);
+
+					if (bossMatch || goldMatch || dmMatch) {
+						// Create container for objective with counter controls
+						let objText = document.createElement('span');
+						objText.className = 'objective-text';
+						objText.textContent = manualObjectives[i];
+						objText.onclick = () => toggleManualObjective(i);
+
+						let counterControls = document.createElement('span');
+						counterControls.className = 'counter-controls';
+
+						let downArrow = document.createElement('button');
+						downArrow.className = 'counter-btn';
+						downArrow.textContent = '▼';
+						downArrow.onclick = (e) => {
+							e.stopPropagation();
+							if (bossMatch) BossTicker(-1);
+							else if (goldMatch) GoldTicker(-1);
+							else if (dmMatch) DMTicker(-1);
+							updateObjectivesList();
+						};
+
+						let countDisplay = document.createElement('span');
+						countDisplay.className = 'counter-display';
+						if (bossMatch) {
+							let target = parseInt(bossMatch[1]);
+							countDisplay.textContent = `${bosscount}/${target}`;
+						} else if (goldMatch) {
+							let target = parseInt(goldMatch[1]);
+							countDisplay.textContent = `${goldcount}/${target}`;
+						} else if (dmMatch) {
+							let target = parseInt(dmMatch[1]);
+							countDisplay.textContent = `${dmcount}/${target}`;
+						}
+
+						let upArrow = document.createElement('button');
+						upArrow.className = 'counter-btn';
+						upArrow.textContent = '▲';
+						upArrow.onclick = (e) => {
+							e.stopPropagation();
+							if (bossMatch) BossTicker(1);
+							else if (goldMatch) GoldTicker(1);
+							else if (dmMatch) DMTicker(1);
+							updateObjectivesList();
+						};
+
+						counterControls.appendChild(downArrow);
+						counterControls.appendChild(countDisplay);
+						counterControls.appendChild(upArrow);
+
+						objItem.appendChild(objText);
+						objItem.appendChild(counterControls);
+
+						// Auto-complete if count reached
+						if (bossMatch && bosscount >= parseInt(bossMatch[1])) {
+							objItem.classList.add('completed');
+							completedCount++;
+						} else if (goldMatch && goldcount >= parseInt(goldMatch[1])) {
+							objItem.classList.add('completed');
+							completedCount++;
+						} else if (dmMatch && dmcount >= parseInt(dmMatch[1])) {
+							objItem.classList.add('completed');
+							completedCount++;
+						} else if (manualObjectivesCompleted[i]) {
+							objItem.classList.add('completed');
+							completedCount++;
+						}
+					} else {
+						// Regular objective without counter
+						objItem.textContent = manualObjectives[i];
+						objItem.onclick = () => toggleManualObjective(i);
+
+						if (manualObjectivesCompleted[i]) {
+							objItem.classList.add('completed');
+							completedCount++;
+						}
+					}
+
+					objectivesDiv.appendChild(objItem);
+					totalCount++;
+				}
+			}
+
+				objectiveCounter.textContent = `${completedCount}/${totalCount}`;
+			}
+
+			function toggleManualObjective(i) {
+				manualObjectivesCompleted[i] = !manualObjectivesCompleted[i];
+				updateObjectivesList();
+			}
+
+			function toggleGeneratedObjective(i) {
+				generatedObjectivesCompleted[i] = !generatedObjectivesCompleted[i];
+				updateObjectivesList();
+			}
+
+			function SwapObjective(i) {
+				if (!ti || !ti.objectives || i >= ti.objectives.length) return;
+				let objectiveIndex = objectivenames.indexOf(ti.objectives[i]);
+				if (objectiveIndex !== -1) {
+					objectives[objectiveIndex + 4] = (objectives[objectiveIndex + 4] === 0 ? 1 : 0);
+					updateObjectivesList();
+				}
+			}
+
+
+			function updateCharacterLocations() {
+				// Update charloc elements based on characterlocations array
+				for (let i = 0; i < 14; i++) {
+					const charLocElement = document.getElementById('charloc' + i);
+					if (charLocElement) {
+						// characterlocations values: 1 = available, 2 = cleared (hide), 0/3 = hidden
+						if (characterlocations[i] === 2) {
+							charLocElement.style.display = 'none';
+						} else if (characterlocations[i] === 1) {
+							charLocElement.style.display = 'block';
+							charLocElement.classList.remove('cleared');
+						} else {
+							charLocElement.style.display = 'none';
+						}
+					}
+				}
+			}
+			</script>
+		</head>
+
+		<!-- 3-COLUMN LAYOUT -->
+		<div id="tracker-container">
+
+			<!-- LEFT COLUMN: Party + Key Items + Objectives -->
+			<div id="left-column">
+
+				<!-- CURRENT PARTY -->
+				<div id="partydiv" class="section">
+					<div class="section-header">CURRENT PARTY</div>
+					<div class="party-grid">
+						<div id="party0" class="party-slot" onclick="openCharacterSelector(0)"></div>
+						<div id="party1" class="party-slot" onclick="openCharacterSelector(1)"></div>
+						<div id="party2" class="party-slot" onclick="openCharacterSelector(2)"></div>
+						<div id="party3" class="party-slot" onclick="openCharacterSelector(3)"></div>
+						<div id="party4" class="party-slot" onclick="openCharacterSelector(4)"></div>
+					</div>
+				</div>
+
+				<!-- KEY ITEMS -->
+				<div class="section">
+					<div class="section-header">KEY ITEMS <span id="itemtracker" class="header-counter">0/17</span></div>
+					<div class="items-grid">
+						<div id="item0" class="item-slot" onclick="SwapItem(0)"></div>
+						<div id="item1" class="item-slot" onclick="SwapItem(1)"></div>
+						<div id="item2" class="item-slot" onclick="SwapItem(2)"></div>
+						<div id="item3" class="item-slot" onclick="SwapItem(3)"></div>
+						<div id="item4" class="item-slot" onclick="SwapItem(4)"></div>
+						<div id="item5" class="item-slot" onclick="SwapItem(5)"></div>
+						<div id="item6" class="item-slot" onclick="SwapItem(6)"></div>
+						<div id="item7" class="item-slot" onclick="SwapItem(7)"></div>
+						<div id="item8" class="item-slot" onclick="SwapItem(8)"></div>
+						<div id="item9" class="item-slot" onclick="SwapItem(9)"></div>
+						<div id="item10" class="item-slot" onclick="SwapItem(10)"></div>
+						<div id="item11" class="item-slot" onclick="SwapItem(11)"></div>
+						<div id="item12" class="item-slot" onclick="SwapItem(12)"></div>
+						<div id="item13" class="item-slot" onclick="SwapItem(13)"></div>
+						<div id="item14" class="item-slot" onclick="SwapItem(14)"></div>
+						<div id="item15" class="item-slot" onclick="SwapItem(15)"></div>
+						<div id="item16" class="item-slot" onclick="SwapItem(16)"></div>
+						<div id="item17" class="item-slot" onclick="SwapItem(17)"></div>
+					</div>
+				</div>
+
+				<!-- OBJECTIVES -->
+				<div id="objectivesdiv" class="section">
+					<div class="section-header">OBJECTIVES <span id="objectivecounter" class="header-counter"></span></div>
+					<div id="objectiveslist" class="objectives-list">
+						<!-- Objectives will be populated by JavaScript -->
+					</div>
+				</div>
+
+			</div>
+
+			<!-- MIDDLE COLUMN: Boss Tracker + Locations + Characters -->
+			<div id="middle-column">
+
+				<!-- BOSS TRACKER (Top) -->
+				<div class="section boss-section">
+					<div class="section-header">BOSS TRACKER</div>
+					<div id="bosslist" class="boss-list">
+						<div id="bossmodal3" onclick="SwapBoss(3);" class="boss-item" data-boss="Antlion"></div>
+						<div id="bossmodal27" onclick="SwapBoss(27);" class="boss-item" data-boss="Asura"></div>
+						<div id="bossmodal29" onclick="SwapBoss(29);" class="boss-item" data-boss="Bahamut"></div>
+						<div id="bossmodal12" onclick="SwapBoss(12);" class="boss-item" data-boss="Baigan"></div>
+						<div id="bossmodal1" onclick="SwapBoss(1);" class="boss-item" data-boss="Soldier"></div>
+						<div id="bossmodal17" onclick="SwapBoss(17);" class="boss-item" data-boss="Calcabrina"></div>
+						<div id="bossmodal25" onclick="SwapBoss(25);" class="boss-item" data-boss="CPU"></div>
+						<div id="bossmodal14" onclick="SwapBoss(14);" class="boss-item" data-boss="DElf"></div>
+						<div id="bossmodal20" onclick="SwapBoss(20);" class="boss-item" data-boss="DarkImps"></div>
+						<div id="bossmodal9" onclick="SwapBoss(9);" class="boss-item" data-boss="DKCecil"></div>
+						<div id="bossmodal31" onclick="SwapBoss(31);" class="boss-item" data-boss="LunarD"></div>
+						<div id="bossmodal0" onclick="SwapBoss(0);" class="boss-item" data-boss="MistD"></div>
+						<div id="bossmodal19" onclick="SwapBoss(19);" class="boss-item" data-boss="Lugae"></div>
+						<div id="bossmodal24" onclick="SwapBoss(24);" class="boss-item" data-boss="Fiends"></div>
+						<div id="bossmodal23" onclick="SwapBoss(23);" class="boss-item" data-boss="EvilWall"></div>
+						<div id="bossmodal6" onclick="SwapBoss(6);" class="boss-item" data-boss="Gauntlet"></div>
+						<div id="bossmodal18" onclick="SwapBoss(18);" class="boss-item" data-boss="Golbez"></div>
+						<div id="bossmodal10" onclick="SwapBoss(10);" class="boss-item" data-boss="Guards"></div>
+						<div id="bossmodal13" onclick="SwapBoss(13);" class="boss-item" data-boss="Kainazzo"></div>
+						<div id="bossmodal11" onclick="SwapBoss(11);" class="boss-item" data-boss="Yang"></div>
+						<div id="bossmodal21" onclick="SwapBoss(21);" class="boss-item" data-boss="Eblan"></div>
+						<div id="bossmodal28" onclick="SwapBoss(28);" class="boss-item" data-boss="Leviath"></div>
+						<div id="bossmodal15" onclick="SwapBoss(15);" class="boss-item" data-boss="MagusSis"></div>
+						<div id="bossmodal7" onclick="SwapBoss(7);" class="boss-item" data-boss="Milon"></div>
+						<div id="bossmodal8" onclick="SwapBoss(8);" class="boss-item" data-boss="MilonZ"></div>
+						<div id="bossmodal5" onclick="SwapBoss(5);" class="boss-item" data-boss="Mombomb"></div>
+						<div id="bossmodal2" onclick="SwapBoss(2);" class="boss-item" data-boss="Octo"></div>
+						<div id="bossmodal26" onclick="SwapBoss(26);" class="boss-item" data-boss="Odin"></div>
+						<div id="bossmodal33" onclick="SwapBoss(33);" class="boss-item" data-boss="Ogopogo"></div>
+						<div id="bossmodal30" onclick="SwapBoss(30);" class="boss-item" data-boss="PaleDim"></div>
+						<div id="bossmodal32" onclick="SwapBoss(32);" class="boss-item" data-boss="Plague"></div>
+						<div id="bossmodal22" onclick="SwapBoss(22);" class="boss-item" data-boss="Rubicante"></div>
+						<div id="bossmodal16" onclick="SwapBoss(16);" class="boss-item" data-boss="Valvalis"></div>
+						<div id="bossmodal4" onclick="SwapBoss(4);" class="boss-item" data-boss="WHag"></div>
+						<div id="bossmodal34" onclick="SwapBoss(34);" class="boss-item" data-boss="Wyvern"></div>
+					</div>
+				</div>
+
+				<!-- Bottom Row: Locations + Characters side by side -->
+				<div id="locations-characters-row" class="top-row">
+					<!-- LOCATIONS -->
+					<div class="section locations-section" onclick="unhideAllKeyItemLocations(event)">
+						<div class="section-header" onclick="unhideAllKeyItemLocations(event)">LOCATIONS</div>
+						<div id="locationslist" class="locations-list">
+							<!-- Locations will be populated by JavaScript -->
+						</div>
+					</div>
+
+					<!-- CHARACTERS -->
+					<div class="section characters-section" onclick="unhideAllCharacterLocations(event)">
+						<div class="section-header" onclick="unhideAllCharacterLocations(event)">CHARACTERS</div>
+						<div id="characterlocationslist" class="character-locations-list">
+							<div id="characterlocation0" onclick="SwapCharacterLocation(0, event);" class="character-location-item world-overworld">Baron Castle</div>
+							<div id="characterlocation1" onclick="SwapCharacterLocation(1, event);" class="character-location-item world-overworld">Town of Baron</div>
+							<div id="characterlocation2" onclick="SwapCharacterLocation(2, event);" class="character-location-item world-overworld">Damcyan</div>
+							<div id="characterlocation3" onclick="SwapCharacterLocation(3, event);" class="character-location-item world-overworld">Eblan Cave</div>
+							<div id="characterlocation4" onclick="SwapCharacterLocation(4, event);" class="character-location-item world-overworld">Giant of Babil</div>
+							<div id="characterlocation5" onclick="SwapCharacterLocation(5, event);" class="character-location-item world-overworld">Kaipo</div>
+							<div id="characterlocation6" onclick="SwapCharacterLocation(6, event);" class="character-location-item world-overworld">Mist Village</div>
+							<div id="characterlocation7" onclick="SwapCharacterLocation(7, event);" class="character-location-item world-overworld">Mt Hobbs</div>
+							<div id="characterlocation8" onclick="SwapCharacterLocation(8, event);" class="character-location-item world-overworld">Mt Ordeals</div>
+							<div id="characterlocation9" onclick="SwapCharacterLocation(9, event);" class="character-location-item world-overworld">Mysidia</div>
+							<div id="characterlocation10" onclick="SwapCharacterLocation(10, event);" class="character-location-item world-overworld">Tower of Zot</div>
+							<div id="characterlocation11" onclick="SwapCharacterLocation(11, event);" class="character-location-item world-overworld">Waterway</div>
+							<div id="characterlocation12" onclick="SwapCharacterLocation(12, event);" class="character-location-item world-underworld">Dwarf Castle</div>
+							<div id="characterlocation13" onclick="SwapCharacterLocation(13, event);" class="character-location-item world-moon">Lunar Sub.</div>
+						</div>
+					</div>
+				</div>
+
+			</div>
+
+		</div>
+
+		<!-- Character Selector Modal -->
+		<div id="character-selector-modal" class="character-modal">
+			<div class="character-modal-content">
+				<div class="character-modal-header">
+					<span class="character-modal-title">SELECT CHARACTER</span>
+					<span class="character-modal-close" onclick="closeCharacterSelector()">&times;</span>
+				</div>
+				<div class="character-selector-grid">
+					<div class="character-option" data-char="empty" onclick="selectCharacter('empty')">
+						<img src="images/character_x.png" alt="Empty">
+						<div class="character-name">Empty</div>
+					</div>
+					<div class="character-option" data-char="0" onclick="selectCharacter(0)">
+						<img src="images/character0_a.png" alt="Dark Knight">
+						<div class="character-name">D.Knight</div>
+					</div>
+					<div class="character-option" data-char="1" onclick="selectCharacter(1)">
+						<img src="images/character1_a.png" alt="Kain">
+						<div class="character-name">Kain</div>
+					</div>
+					<div class="character-option" data-char="2" onclick="selectCharacter(2)">
+						<img src="images/character2_a.png" alt="Rydia">
+						<div class="character-name">Rydia</div>
+					</div>
+					<div class="character-option" data-char="3" onclick="selectCharacter(3)">
+						<img src="images/character3_a.png" alt="Tellah">
+						<div class="character-name">Tellah</div>
+					</div>
+					<div class="character-option" data-char="4" onclick="selectCharacter(4)">
+						<img src="images/character4_a.png" alt="Edward">
+						<div class="character-name">Edward</div>
+					</div>
+					<div class="character-option" data-char="5" onclick="selectCharacter(5)">
+						<img src="images/character5_a.png" alt="Rosa">
+						<div class="character-name">Rosa</div>
+					</div>
+					<div class="character-option" data-char="6" onclick="selectCharacter(6)">
+						<img src="images/character6_a.png" alt="Yang">
+						<div class="character-name">Yang</div>
+					</div>
+					<div class="character-option" data-char="7" onclick="selectCharacter(7)">
+						<img src="images/character7_a.png" alt="Palom">
+						<div class="character-name">Palom</div>
+					</div>
+					<div class="character-option" data-char="8" onclick="selectCharacter(8)">
+						<img src="images/character8_a.png" alt="Porom">
+						<div class="character-name">Porom</div>
+					</div>
+					<div class="character-option" data-char="9" onclick="selectCharacter(9)">
+						<img src="images/character9_a.png" alt="Cid">
+						<div class="character-name">Cid</div>
+					</div>
+					<div class="character-option" data-char="10" onclick="selectCharacter(10)">
+						<img src="images/character10_a.png" alt="Edge">
+						<div class="character-name">Edge</div>
+					</div>
+					<div class="character-option" data-char="11" onclick="selectCharacter(11)">
+						<img src="images/character11_a.png" alt="FuSoYa">
+						<div class="character-name">FuSoYa</div>
+					</div>
+					<div class="character-option" data-char="0_2" onclick="selectCharacter('0_2')">
+						<img src="images/character0_2_a.png" alt="Paladin">
+						<div class="character-name">Paladin</div>
+					</div>
+					<div class="character-option" data-char="2_2" onclick="selectCharacter('2_2')">
+						<img src="images/character2_2_a.png" alt="Adult Rydia">
+						<div class="character-name">A.Rydia</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Hidden dummy elements for ApplyChecks compatibility -->
+		<div style="display: none;">
+			<div id="character0"></div>
+			<div id="character1"></div>
+			<div id="character2"></div>
+			<div id="character3"></div>
+			<div id="character4"></div>
+			<div id="character5"></div>
+			<div id="character6"></div>
+			<div id="character7"></div>
+			<div id="character8"></div>
+			<div id="character9"></div>
+			<div id="character10"></div>
+			<div id="character11"></div>
+			<div id="character0_x"></div>
+			<div id="character1_x"></div>
+			<div id="character2_x"></div>
+			<div id="character3_x"></div>
+			<div id="character4_x"></div>
+			<div id="character5_x"></div>
+			<div id="character6_x"></div>
+			<div id="character7_x"></div>
+			<div id="character8_x"></div>
+			<div id="character9_x"></div>
+			<div id="character10_x"></div>
+			<div id="character11_x"></div>
+			<div id="keyitemlocationviewchecked"></div>
+			<div id="keyitemlocationviewunchecked"></div>
+			<div id="characterlocationviewchecked"></div>
+			<div id="characterlocationviewunchecked"></div>
+			<div id="townlocationviewchecked"></div>
+			<div id="townlocationviewunchecked"></div>
+			<div id="trappedlocationviewchecked"></div>
+			<div id="trappedlocationviewunchecked"></div>
+			<span id="bosscountspan"></span>
+			<div id="autotrackingdiv"></div>
+			<div id="characterlocation0"></div>
+			<div id="characterlocation1"></div>
+			<div id="characterlocation2"></div>
+			<div id="characterlocation3"></div>
+			<div id="characterlocation4"></div>
+			<div id="characterlocation5"></div>
+			<div id="characterlocation6"></div>
+			<div id="characterlocation7"></div>
+			<div id="characterlocation8"></div>
+			<div id="characterlocation9"></div>
+			<div id="characterlocation10"></div>
+			<div id="characterlocation11"></div>
+			<div id="characterlocation12"></div>
+			<div id="characterlocation13"></div>
+			<div id="townlocation0"></div>
+			<div id="townlocation1"></div>
+			<div id="townlocation2"></div>
+			<div id="townlocation3"></div>
+			<div id="townlocation4"></div>
+			<div id="townlocation5"></div>
+			<div id="townlocation6"></div>
+			<div id="townlocation7"></div>
+			<div id="townlocation8"></div>
+			<div id="townlocation9"></div>
+			<div id="townlocation10"></div>
+			<div id="townlocation11"></div>
+			<div id="townlocation12"></div>
+			<div id="trappedlocation0"></div>
+			<div id="trappedlocation1"></div>
+			<div id="trappedlocation2"></div>
+			<div id="trappedlocation3"></div>
+			<div id="trappedlocation4"></div>
+			<div id="trappedlocation5"></div>
+			<div id="trappedlocation6"></div>
+			<div id="trappedlocation7"></div>
+			<div id="trappedlocation8"></div>
+			<div id="trappedlocation9"></div>
+		</div>
+
+		<script>
+		// Initialize item images on page load
+		function initializeItemImages() {
+			for (let i = 0; i < 18; i++) {
+				let itemDiv = document.getElementById('item' + i);
+				if (itemDiv) {
+					itemDiv.style.backgroundImage = `url('images/item${i}.png')`;
+					// Initialize opacity based on keyitems array
+					if (keyitems[i] === 1 || keyitems[i] === true) {
+						itemDiv.style.opacity = '1.0';
+						itemDiv.style.filter = 'none';
+					} else {
+						itemDiv.style.opacity = '0.3';
+						itemDiv.style.filter = 'grayscale(100%)';
+					}
+				}
+			}
+		}
+
+		// Initialize boss images on page load
+		function initializeBossImages() {
+			const bossItems = document.querySelectorAll('.boss-item');
+			bossItems.forEach(item => {
+				const bossName = item.getAttribute('data-boss');
+				if (bossName) {
+					// Set gray image as default
+					item.style.backgroundImage = `url('boss/${bossName}-Gray.png')`;
+				}
+			});
+		}
+
+		// Handle boss click to toggle defeated status
+		function SwapBoss(bossId) {
+			const bossElement = document.getElementById('bossmodal' + bossId);
+			if (!bossElement) return;
+
+			const bossName = bossElement.getAttribute('data-boss');
+			if (!bossName) return;
+
+			// Toggle between gray and color images
+			if (bossElement.classList.contains('defeated')) {
+				// Boss is defeated (color), mark as alive (gray)
+				bossElement.classList.remove('defeated');
+				bossElement.style.backgroundImage = `url('boss/${bossName}-Gray.png')`;
+			} else {
+				// Boss is alive (gray), mark as defeated (color)
+				bossElement.classList.add('defeated');
+				bossElement.style.backgroundImage = `url('boss/${bossName}-Color.png')`;
+			}
+		}
+
+		// Character selector variables
+		let currentPartySlot = null;
+
+		// Open character selector modal
+		function openCharacterSelector(slotIndex) {
+			// Check if current party is disabled
+			if (typeof disablecurrentparty !== 'undefined' && disablecurrentparty === '1') {
+				return;
+			}
+
+			currentPartySlot = slotIndex;
+			const modal = document.getElementById('character-selector-modal');
+			modal.style.display = 'block';
+		}
+
+		// Close character selector modal
+		function closeCharacterSelector() {
+			const modal = document.getElementById('character-selector-modal');
+			modal.style.display = 'none';
+			currentPartySlot = null;
+		}
+
+		// Select a character and assign to party slot
+		function selectCharacter(charId) {
+			if (currentPartySlot === null) return;
+
+			const partySlot = document.getElementById('party' + currentPartySlot);
+			if (!partySlot) return;
+
+			// Update partymembers array
+			let characterIndex;
+			let isAltForm = false;
+			if (charId === 'empty') {
+				characterIndex = -1;
+			} else if (charId === '0_2') {
+				characterIndex = 0; // Paladin is still Cecil (character 0)
+				isAltForm = true;
+				characters[0] = true; // Mark as Paladin form
+			} else if (charId === '2_2') {
+				characterIndex = 2; // Adult Rydia is still Rydia (character 2)
+				isAltForm = true;
+				characters[2] = true; // Mark as Adult form
+			} else {
+				characterIndex = parseInt(charId);
+			}
+
+			// Update the partymembers array (used by ApplyChecks and auto-tracking)
+			if (typeof partymembers !== 'undefined') {
+				partymembers[currentPartySlot] = characterIndex;
+			}
+
+			// Update persistent tracker party slots
+			if (typeof window.trackerPartySlots !== 'undefined') {
+				window.trackerPartySlots[currentPartySlot] = characterIndex;
+			}
+			if (typeof window.trackerPartyForms !== 'undefined') {
+				window.trackerPartyForms[currentPartySlot] = isAltForm;
+			}
+
+			// Update the visual display
+			updatePartyDisplay();
+
+			// Call ApplyChecks if it exists to update location logic
+			if (typeof ApplyChecks === 'function') {
+				ApplyChecks();
+			}
+
+			closeCharacterSelector();
+		}
+
+		// Update party display based on partymembers array
+		function updatePartyDisplay() {
+			for (let i = 0; i < 5; i++) {
+				const partySlot = document.getElementById('party' + i);
+				if (!partySlot) continue;
+
+				const charId = partymembers[i];
+
+				if (charId === -1) {
+					// Empty slot
+					partySlot.style.backgroundImage = 'url(\'images/character_x.png\')';
+				} else if (charId === 0 && characters && characters[0] === false) {
+					// Dark Knight Cecil
+					partySlot.style.backgroundImage = 'url(\'images/character0_a.png\')';
+				} else if (charId === 0 && characters && characters[0] === true) {
+					// Paladin Cecil
+					partySlot.style.backgroundImage = 'url(\'images/character0_2_a.png\')';
+				} else if (charId === 2 && characters && characters[2] === false) {
+					// Child Rydia
+					partySlot.style.backgroundImage = 'url(\'images/character2_a.png\')';
+				} else if (charId === 2 && characters && characters[2] === true) {
+					// Adult Rydia
+					partySlot.style.backgroundImage = 'url(\'images/character2_2_a.png\')';
+				} else if (charId >= 0 && charId <= 11) {
+					// Regular character
+					partySlot.style.backgroundImage = `url('images/character${charId}_a.png')`;
+				}
+			}
+		}
+
+
+		// Close modal when clicking outside of it
+		window.onclick = function(event) {
+			const modal = document.getElementById('character-selector-modal');
+			if (event.target === modal) {
+				closeCharacterSelector();
+			}
+		}
+
+		// Apply V2 styling to locations after ApplyChecks runs
+		function applyV2LocationStyling() {
+			// Handle key item locations
+			// NOTE: Do NOT touch display property - that's managed by ApplyChecks()
+			// This function only adds/removes the 'cleared' class for styling
+			for (let i = 0; i < 29; i++) {
+				const locationElement = document.getElementById('keyitemlocation' + i);
+				if (locationElement && (keyitemlocations[i] === 2 || keyitemlocations[i] === 4)) {
+					// Add cleared styling (ApplyChecks handles display)
+					locationElement.classList.add('cleared');
+				} else if (locationElement) {
+					locationElement.classList.remove('cleared');
+				}
+			}
+
+			// Handle character locations
+			if (typeof characterlocations !== 'undefined') {
+				for (let i = 0; i < characterlocations.length; i++) {
+					const charElement = document.getElementById('characterlocation' + i);
+					if (charElement && (characterlocations[i] === 2 || characterlocations[i] === 4)) {
+						// Add cleared styling (ApplyChecks handles display)
+						charElement.classList.add('cleared');
+					} else if (charElement) {
+						charElement.classList.remove('cleared');
+					}
+				}
+			}
+		}
+
+		// Populate locations list dynamically
+		function populateLocations() {
+			const locationsDiv = document.getElementById('locationslist');
+
+			// Locations organized by world and alphabetically within each group
+			// Each entry is: [display name, original index, world class]
+			const locations = [
+				// OVERWORLD (alphabetical)
+				['Adamant Cave', 0, 'world-overworld'],
+				['Antlion Cave', 1, 'world-overworld'],
+				['Baron Castle [King]', 2, 'world-overworld'],
+				['Baron Castle [Odin]', 3, 'world-overworld'],
+				['Clear Hook Route', 27, 'world-overworld'],
+				['Fabul [Defend]', 5, 'world-overworld'],
+				['Magnes Cave', 8, 'world-overworld'],
+				['Mist Village', 9, 'world-overworld'],
+				['Mt Ordeals', 10, 'world-overworld'],
+				['Toroia Castle', 12, 'world-overworld'],
+				['Tower of Zot', 11, 'world-overworld'],
+				['Town of Baron', 4, 'world-overworld'],
+
+				// UNDERWORLD (alphabetical)
+				['Dwarf Castle', 13, 'world-underworld'],
+				['Fabul [Sheila/Pan]', 7, 'world-underworld'],
+				['Fabul [Sheila/Sylph]', 6, 'world-underworld'],
+				['Feymarch [Asura]', 15, 'world-underworld'],
+				['Feymarch [Chest]', 14, 'world-underworld'],
+				['Feymarch [Leviathan]', 16, 'world-underworld'],
+				['Lower Babil [Boss]', 17, 'world-underworld'],
+				['Lower Babil [Cannon]', 18, 'world-underworld'],
+				['Sealed Cave', 19, 'world-underworld'],
+				['Sylph Cave', 20, 'world-underworld'],
+				['Warp Glitch? [Yes] [No]', 28, 'world-underworld'],
+
+				// MOON (alphabetical)
+				['Bahamut', 21, 'world-moon'],
+				['Lunar [Crystal]', 22, 'world-moon'],
+				['Lunar [Masamune]', 23, 'world-moon'],
+				['Lunar [Murasame]', 24, 'world-moon'],
+				['Lunar [Ribbon]', 25, 'world-moon'],
+				['Lunar [White]', 26, 'world-moon']
+			];
+
+			locationsDiv.innerHTML = '';
+			for (let i = 0; i < locations.length; i++) {
+				let [name, originalIndex, worldClass] = locations[i];
+				let locationItem = document.createElement('div');
+				locationItem.id = 'keyitemlocation' + originalIndex;
+				locationItem.className = 'location-item ' + worldClass;
+				locationItem.textContent = name;
+				locationItem.onclick = (e) => SwapKeyItemLocation(originalIndex, e);
+				locationsDiv.appendChild(locationItem);
+			}
+		}
+
+		// Unhide all hidden items in the key item locations section
+		function unhideAllKeyItemLocations(event) {
+			if (!event || !event.shiftKey) return;
+			console.log('Shift+Click on KEY ITEMS section - unhiding all hidden locations');
+			let unhiddenCount = 0;
+			for (let i = 0; i < keyitemlocations.length; i++) {
+				if (keyitemlocations[i] === 3 || keyitemlocations[i] === 4) {
+					keyitemlocations[i] = 1;
+					unhiddenCount++;
+				}
+			}
+			console.log('Unhidden', unhiddenCount, 'key item locations');
+			if (unhiddenCount > 0) {
+				ApplyChecks();
+			}
+		}
+
+		// Unhide all hidden items in the character locations section
+		function unhideAllCharacterLocations(event) {
+			if (!event || !event.shiftKey) return;
+			console.log('Shift+Click on CHARACTERS section - unhiding all hidden locations');
+			let unhiddenCount = 0;
+			for (let i = 0; i < characterlocations.length; i++) {
+				if (characterlocations[i] === 3) {
+					characterlocations[i] = 1;
+					unhiddenCount++;
+				}
+			}
+			console.log('Unhidden', unhiddenCount, 'character locations');
+			if (unhiddenCount > 0) {
+				ApplyChecks();
+			}
+		}
+
+		// Initialize on page load
+		window.addEventListener('load', function() {
+			console.log('Tracker V2 initializing...');
+
+			// Manually parse autotracking from URL if needed (workaround for track.js not parsing correctly)
+			const urlParams = new URLSearchParams(window.location.search);
+			const aParam = urlParams.get('a');
+			console.log('URL parameter a=', aParam);
+			if (aParam && aParam.startsWith('1')) {
+				enableautotracking = '1';
+				autotrackingport = aParam.substring(1);
+				console.log('Manually set autotracking: enabled=1, port=', autotrackingport);
+			}
+
+			// Parse manual objectives from URL parameter
+			const mParam = urlParams.get('m');
+			if (mParam) {
+				const decodedObjectives = decodeURIComponent(mParam);
+				if (decodedObjectives.trim()) {
+					manualObjectives = decodedObjectives.split('\n').filter(obj => obj.trim() !== '');
+					manualObjectivesCompleted = new Array(manualObjectives.length).fill(false);
+					console.log('Manual objectives loaded:', manualObjectives);
+				}
+			}
+
+			console.log('keyitems array:', keyitems);
+			console.log('keyitemlocations array:', keyitemlocations);
+
+			initializeItemImages();
+			initializeBossImages();
+			populateLocations();
+
+			// Call ApplyChecks if it exists to set up initial state
+			if (typeof ApplyChecks === 'function') {
+				// Set viewactivekeyitems to true so ApplyChecks shows available locations (value 1)
+				if (typeof viewactivekeyitems !== 'undefined') {
+					viewactivekeyitems = true;
+				}
+				ApplyChecks(); // ApplyChecks now handles Knofree:dwarf flag internally
+				applyV2LocationStyling();
+			}
+
+			// Initialize autotracking connection if enabled
+			console.log('Autotracking check: enableautotracking=', enableautotracking, 'autotrackingport=', autotrackingport, 'ti exists=', typeof ti !== 'undefined');
+			if (enableautotracking === '1' && typeof ti !== 'undefined') {
+				console.log('Starting autotracking on port', autotrackingport);
+				ti.getConnected(autotrackingport, function(error) {
+					console.error('Autotracking error:', error);
+				});
+			} else {
+				console.log('Autotracking not starting. enableautotracking:', enableautotracking, 'ti:', typeof ti);
+			}
+
+			// Set fixed browser window size
+			function setFixedWindowSize() {
+				// Fixed width: 615px to fit all content horizontally
+				// Fixed height: 575px by default, or specific heights for disable combinations
+				var height = 575;
+
+				// Check vertical mode first
+				var verticallayout = getParameterByName('v');
+				if (verticallayout === '1') {
+					// Check if objectives are disabled in vertical mode
+					if (typeof disableobjectivetracker !== 'undefined' && disableobjectivetracker === '1') {
+						height = 835;  // 825 + 10px for objectives disabled
+					} else {
+						height = 825;
+					}
+				}
+				// Check most specific combinations first (3 flags), then 2 flags, then default
+				else if (typeof disableobjectivetracker !== 'undefined' && disableobjectivetracker === '1' &&
+				    typeof disableloctracker !== 'undefined' && disableloctracker === '1' &&
+				    typeof disablebosstracker !== 'undefined' && disablebosstracker === '1') {
+					height = 470;
+				} else if (typeof disableobjectivetracker !== 'undefined' && disableobjectivetracker === '1' &&
+				           typeof disableloctracker !== 'undefined' && disableloctracker === '1') {
+					height = 720;
+				} else if (typeof disableobjectivetracker !== 'undefined' && disableobjectivetracker === '1' &&
+				           typeof disablecharacterstracker !== 'undefined' && disablecharacterstracker === '1') {
+					height = 720;
+				}
+
+				window.resizeTo(615, height);
+				console.log('Window set to fixed size: 615 x ' + height);
+			}
+
+			// Set fixed size after content loads
+			setTimeout(setFixedWindowSize, 500);
+		});
+
+		// Initialize tracker like Durendx version
+		$(document).ready(function(){
+			SetModes();
+			ApplyChecks(); // Apply flag-based logic and render locations/characters
+			updateObjectivesList();
+
+			// Handle disable objectives tracking (must run after SetModes which parses URL params)
+			// Only run if vertical mode is NOT enabled
+			var verticallayout = getParameterByName('v');
+			if (typeof disableobjectivetracker !== 'undefined' && disableobjectivetracker === '1' && verticallayout !== '1') {
+				const objectivesDiv = document.getElementById('objectivesdiv');
+				const locationsCharactersRow = document.getElementById('locations-characters-row');
+				const leftColumn = document.getElementById('left-column');
+				const bossSection = document.querySelector('.boss-section');
+				const bossList = document.getElementById('bosslist');
+
+				if (objectivesDiv && locationsCharactersRow && leftColumn) {
+					// Hide objectives section
+					objectivesDiv.style.display = 'none';
+
+					// Move locations-characters-row from middle column to left column
+					leftColumn.appendChild(locationsCharactersRow);
+
+					// Check if boss tracker is also disabled
+					if (typeof disablebosstracker !== 'undefined' && disablebosstracker === '1') {
+						// Both objectives and boss disabled: keep characters on right side of locations (side by side)
+						// Override the flexDirection column from boss disable handler
+						locationsCharactersRow.style.flexDirection = 'row';
+
+						// Set left column to fixed width for locations + characters side by side
+						leftColumn.style.width = '300px';
+						leftColumn.style.flex = '0 0 300px';
+
+						console.log('Objectives and boss disabled: characters on right side of locations');
+					} else {
+						// Only objectives disabled: make boss tracker taller and narrower to run alongside left column content
+						if (bossList) {
+							bossList.style.height = '452px';  // 3x12 grid extended: FINAL HEIGHT - DO NOT CHANGE
+							bossList.style.gridTemplateColumns = 'repeat(3, 1fr)';  // 3 columns wide
+						}
+
+						// Adjust boss section padding to fit better
+						if (bossSection) {
+							bossSection.style.padding = '4px';
+						}
+
+						console.log('Objectives disabled: hidden objectives, moved locations+characters to left column, expanded boss tracker (3x12)');
+					}
+				}
+			}
+
+		// Handle disable location tracking (must run after SetModes which parses URL params)
+		// Only run if vertical mode is NOT enabled
+		if (typeof disableloctracker !== 'undefined' && disableloctracker === '1' && verticallayout !== '1') {
+			const locationsSection = document.querySelector('.locations-section');
+			const charactersSection = document.querySelector('.characters-section');
+			const leftColumn = document.getElementById('left-column');
+			const locationsCharactersRow = document.getElementById('locations-characters-row');
+			const bossList = document.getElementById('bosslist');
+			const bossSection = document.querySelector('.boss-section');
+			const characterLocationsList = document.querySelector('.character-locations-list');
+			const middleColumn = document.getElementById('middle-column');
+
+			if (locationsSection && charactersSection && leftColumn && locationsCharactersRow) {
+				// Hide locations section
+				locationsSection.style.display = 'none';
+
+				// Reduce gap in middle column to bring sections closer together
+				if (middleColumn) {
+					middleColumn.style.gap = '2px';
+				}
+
+				// Move characters section directly under boss tracker in middle column
+				if (middleColumn && charactersSection) {
+					middleColumn.appendChild(charactersSection);
+				}
+
+				// Make boss tracker 5 columns wide and 8 rows tall (5x8 grid)
+				if (bossList) {
+					bossList.style.height = '295px';  // 5x8 grid: 8 rows * 36px + 7 gaps = 295px
+					bossList.style.gridTemplateColumns = 'repeat(5, 1fr)';  // 5 columns wide
+				}
+
+				// Make characters section 23 pixels wider than default (160px + 23px = 183px)
+				if (charactersSection) {
+					charactersSection.style.width = '183px';
+					charactersSection.style.minWidth = '0';
+				}
+
+				// Reduce characters section height by 40% (from 210px to 123px)
+				if (characterLocationsList) {
+					characterLocationsList.style.height = '123px';
+				}
+
+				console.log('Locations disabled: hidden locations, moved characters under boss tracker, reduced character height by 40%, narrowed characters by 5px');
+			}
+		}
+
+		// Handle BOTH objectives AND location tracking disabled (must run after individual handlers)
+		// Only run if vertical mode is NOT enabled
+		if (typeof disableobjectivetracker !== 'undefined' && disableobjectivetracker === '1' &&
+		    typeof disableloctracker !== 'undefined' && disableloctracker === '1' &&
+		    verticallayout !== '1') {
+			const bossSection = document.querySelector('.boss-section');
+			const bossList = document.getElementById('bosslist');
+			const leftColumn = document.getElementById('left-column');
+			const middleColumn = document.getElementById('middle-column');
+			const charactersSection = document.querySelector('.characters-section');
+
+			if (bossSection && bossList && leftColumn) {
+				// Move boss tracker to left column (under key items)
+				leftColumn.appendChild(bossSection);
+
+				// Move characters section to left column (under boss tracker)
+				if (charactersSection) {
+					leftColumn.appendChild(charactersSection);
+
+					// Make characters container match boss tracker width
+					charactersSection.style.width = '257px';  // Match boss tracker width (6 sprites wide)
+					charactersSection.style.minWidth = '0';
+				}
+
+				// Make character text display in two columns
+				const characterLocationsList = document.querySelector('.character-locations-list');
+				if (characterLocationsList) {
+					characterLocationsList.style.columnCount = '2';
+					characterLocationsList.style.columnGap = '10px';
+					characterLocationsList.style.textAlign = 'left';
+					characterLocationsList.style.display = 'block';
+					characterLocationsList.style.height = '105px';  // 50% of default 210px
+				}
+
+				// Reduce gap between key items and boss tracker by 50%
+				leftColumn.style.gap = '4px';  // Default is 8px, reduced to 4px (50% smaller)
+
+				// Move boss tracker up by 3px
+				if (bossSection) {
+					bossSection.style.marginTop = '-3px';
+				}
+
+				// Make boss tracker 6 columns wide to match key items width
+				bossList.style.gridTemplateColumns = 'repeat(6, 1fr)';  // 6 columns wide
+
+				// Calculate height for 6 column layout (35 bosses needs 6 rows: 6x6=36 slots)
+				bossList.style.height = '221px';  // 6 rows * 36px + 5 gaps = 221px
+
+				// Hide middle column since it's now empty
+				if (middleColumn) {
+					middleColumn.style.display = 'none';
+				}
+
+				console.log('Objectives AND Locations disabled: moved boss tracker and characters to left column under key items (6 columns wide)');
+			}
+		}
+
+		// Handle BOTH objectives AND characters tracking disabled (must run after individual handlers)
+		// Only run if vertical mode is NOT enabled
+		if (typeof disableobjectivetracker !== 'undefined' && disableobjectivetracker === '1' &&
+		    typeof disablecharacterstracker !== 'undefined' && disablecharacterstracker === '1' &&
+		    verticallayout !== '1') {
+			const bossSection = document.querySelector('.boss-section');
+			const bossList = document.getElementById('bosslist');
+			const leftColumn = document.getElementById('left-column');
+			const middleColumn = document.getElementById('middle-column');
+			const locationsSection = document.querySelector('.locations-section');
+
+			if (bossSection && bossList && leftColumn) {
+				// Move boss tracker to left column (under key items)
+				leftColumn.appendChild(bossSection);
+
+				// Move locations section to left column (under boss tracker)
+				if (locationsSection) {
+					leftColumn.appendChild(locationsSection);
+
+					// Make locations container match boss tracker width
+					locationsSection.style.width = '257px';  // Match boss tracker width (6 sprites wide)
+					locationsSection.style.minWidth = '0';
+				}
+
+				// Make location text display in three columns
+				const locationsList = document.querySelector('.locations-list');
+				if (locationsList) {
+					locationsList.style.display = 'block';
+					locationsList.style.columnCount = '3';
+					locationsList.style.columnGap = '10px';
+					locationsList.style.textAlign = 'left';
+					locationsList.style.height = '105px';  // 50% of default 210px
+					locationsList.style.width = '257px';  // Match container width
+				}
+
+				// Reduce gap between key items and boss tracker by 50%
+				leftColumn.style.gap = '4px';  // Default is 8px, reduced to 4px (50% smaller)
+
+				// Move boss tracker up by 3px
+				if (bossSection) {
+					bossSection.style.marginTop = '-3px';
+				}
+
+				// Make boss tracker 6 columns wide to match key items width
+				bossList.style.gridTemplateColumns = 'repeat(6, 1fr)';  // 6 columns wide
+
+				// Calculate height for 6 column layout (35 bosses needs 6 rows: 6x6=36 slots)
+				bossList.style.height = '221px';  // 6 rows * 36px + 5 gaps = 221px
+
+				// Hide middle column since it's now empty
+				if (middleColumn) {
+					middleColumn.style.display = 'none';
+				}
+
+				console.log('Objectives AND Characters disabled: moved boss tracker and locations to left column under key items (6 columns wide)');
+			}
+		}
+
+		// Handle disable characters tracking (must run after SetModes which parses URL params)
+		if (typeof disablecharacterstracker !== 'undefined' && disablecharacterstracker === '1') {
+			const charactersSection = document.querySelector('.characters-section');
+
+			if (charactersSection) {
+				// Hide characters section
+				charactersSection.style.display = 'none';
+
+				console.log('Characters tracking disabled: hidden characters section');
+			}
+		}
+
+		// Handle disable boss tracker (must run after SetModes which parses URL params)
+		// Only run if vertical mode is NOT enabled
+		if (typeof disablebosstracker !== 'undefined' && disablebosstracker === '1' && verticallayout !== '1') {
+			const bossSection = document.querySelector('.boss-section');
+			const locationsSection = document.querySelector('.locations-section');
+			const charactersSection = document.querySelector('.characters-section');
+			const locationsCharactersRow = document.getElementById('locations-characters-row');
+			const locationsList = document.querySelector('.locations-list');
+			const characterLocationsList = document.querySelector('.character-locations-list');
+
+			if (bossSection) {
+				// Hide boss tracker section
+				bossSection.style.display = 'none';
+
+				// Move characters section under locations section (UNLESS objectives are also disabled)
+				if (locationsCharactersRow && charactersSection) {
+					// Only set to column if objectives are NOT disabled
+					if (typeof disableobjectivetracker === 'undefined' || disableobjectivetracker !== '1') {
+						locationsCharactersRow.style.flexDirection = 'column';
+					}
+				}
+
+				// Reduce locations height by 5px (from 210px to 205px)
+				if (locationsList) {
+					locationsList.style.height = '205px';
+				}
+
+				// Make characters width match locations width (160px)
+				if (charactersSection) {
+					charactersSection.style.width = '160px';
+					charactersSection.style.minWidth = '0';
+				}
+
+				console.log('Boss tracker disabled: hidden boss tracker section, moved characters under locations, adjusted dimensions');
+			}
+		}
+
+		// Handle objectives, location tracking, AND boss tracker all disabled (must run AFTER boss tracker handler to override)
+		// Only run if vertical mode is NOT enabled
+		if (typeof disableobjectivetracker !== 'undefined' && disableobjectivetracker === '1' &&
+		    typeof disableloctracker !== 'undefined' && disableloctracker === '1' &&
+		    typeof disablebosstracker !== 'undefined' && disablebosstracker === '1' &&
+		    verticallayout !== '1') {
+			const leftColumn = document.getElementById('left-column');
+			const middleColumn = document.getElementById('middle-column');
+			const charactersSection = document.querySelector('.characters-section');
+
+			if (leftColumn && charactersSection) {
+				// Move characters section to left column (under key items)
+				leftColumn.appendChild(charactersSection);
+
+				// Make characters container match key items width
+				charactersSection.style.width = '336px';  // Match key items outer width (280px + 20%)
+				charactersSection.style.minWidth = '0';
+
+				// Make character text display in three columns
+				const characterLocationsList = document.querySelector('.character-locations-list');
+				if (characterLocationsList) {
+					characterLocationsList.style.display = 'block';
+					characterLocationsList.style.columnCount = '3';
+					characterLocationsList.style.columnGap = '10px';
+					characterLocationsList.style.textAlign = 'left';
+					characterLocationsList.style.height = '105px';  // 50% of default 210px
+				}
+
+				// Reduce gap between key items and characters by 50%
+				leftColumn.style.gap = '4px';  // Default is 8px, reduced to 4px (50% smaller)
+
+				// Hide middle column since it's now empty
+				if (middleColumn) {
+					middleColumn.style.display = 'none';
+				}
+
+				console.log('Objectives, Locations, AND Boss disabled: moved characters to left column under key items (3 columns wide)');
+			}
+		}
+
+		// Handle vertical mode (must run after SetModes which parses URL params)
+		var verticallayout = getParameterByName('v');
+		if (verticallayout === '1') {
+			const objectivesDiv = document.getElementById('objectivesdiv');
+			const leftColumn = document.getElementById('left-column');
+			const locationsCharactersRow = document.getElementById('locations-characters-row');
+			const bossSection = document.querySelector('.boss-section');
+			const bossList = document.getElementById('bosslist');
+
+			if (objectivesDiv && leftColumn && locationsCharactersRow && bossSection) {
+				// Check if objectives are disabled
+				if (typeof disableobjectivetracker !== 'undefined' && disableobjectivetracker === '1') {
+					// Check if location tracker is also disabled
+					if (typeof disableloctracker !== 'undefined' && disableloctracker === '1') {
+						// Both objectives and location disabled: check if boss is also disabled
+						const locationsSection = document.querySelector('.locations-section');
+						const charactersSection = document.querySelector('.characters-section');
+						const characterLocationsList = document.querySelector('.character-locations-list');
+
+						// Hide locations section
+						if (locationsSection) {
+							locationsSection.style.display = 'none';
+						}
+
+						// Check if boss tracker is also disabled
+						if (typeof disablebosstracker !== 'undefined' && disablebosstracker === '1') {
+							// All three disabled: hide boss, move only characters to left column
+							if (bossSection) {
+								bossSection.style.display = 'none';
+							}
+
+							if (charactersSection && leftColumn) {
+								leftColumn.appendChild(charactersSection);
+								charactersSection.style.width = '260px';
+								charactersSection.style.marginTop = '-6px';
+
+								if (characterLocationsList) {
+									characterLocationsList.style.width = '260px';
+									characterLocationsList.style.height = '147px';
+									characterLocationsList.style.display = 'block';
+									characterLocationsList.style.columnCount = '3';
+									characterLocationsList.style.columnGap = '4px';
+								}
+							}
+
+							console.log('Vertical mode with objectives, location, and boss disabled: hidden all three, expanded characters to 3 columns');
+						} else {
+							// Only objectives and location disabled: show boss tracker
+							// Move boss tracker to left column (after key items)
+							leftColumn.appendChild(bossSection);
+
+							// Move characters section below boss tracker
+							if (charactersSection) {
+								leftColumn.appendChild(charactersSection);
+
+								// Style characters like the locations off settings
+								charactersSection.style.width = '260px';
+								charactersSection.style.marginTop = '-6px';
+
+								if (characterLocationsList) {
+									characterLocationsList.style.width = '260px';
+									characterLocationsList.style.height = '147px';
+									characterLocationsList.style.display = 'block';
+									characterLocationsList.style.columnCount = '3';
+									characterLocationsList.style.columnGap = '4px';
+								}
+							}
+
+							// Make boss tracker 6 columns wide and auto height
+							if (bossList) {
+								bossList.style.gridTemplateColumns = 'repeat(6, 1fr)';
+								bossList.style.height = 'auto';
+							}
+
+							console.log('Vertical mode with objectives and location disabled: boss tracker 6 wide under key items, characters under boss');
+						}
+					} else {
+						// Only objectives disabled: move boss tracker below key items, then locations+characters below boss
+						// Move boss tracker to left column (after key items)
+						leftColumn.appendChild(bossSection);
+
+						// Move locations and characters below boss tracker
+						leftColumn.appendChild(locationsCharactersRow);
+
+						// Make boss tracker 6 columns wide and auto height
+						if (bossList) {
+							bossList.style.gridTemplateColumns = 'repeat(6, 1fr)';
+							bossList.style.height = 'auto';
+						}
+
+						console.log('Vertical mode with objectives disabled: boss tracker 6 wide below key items, locations+characters below boss');
+					}
+				}
+				// Check if location tracker is disabled
+				else if (typeof disableloctracker !== 'undefined' && disableloctracker === '1') {
+					// Location disabled: hide locations, check if boss is also disabled
+					const locationsSection = document.querySelector('.locations-section');
+					const charactersSection = document.querySelector('.characters-section');
+					const characterLocationsList = document.querySelector('.character-locations-list');
+
+					// Hide locations section
+					if (locationsSection) {
+						locationsSection.style.display = 'none';
+					}
+
+					// Check if boss tracker is also disabled
+					if (typeof disablebosstracker !== 'undefined' && disablebosstracker === '1') {
+						// Both location and boss disabled: hide boss, move characters to left column
+						if (bossSection) {
+							bossSection.style.display = 'none';
+						}
+
+						if (charactersSection && leftColumn) {
+							leftColumn.appendChild(charactersSection);
+							charactersSection.style.width = '260px';
+							charactersSection.style.marginTop = '-6px';
+
+							if (characterLocationsList) {
+								characterLocationsList.style.width = '260px';
+								characterLocationsList.style.height = '147px';
+								characterLocationsList.style.display = 'block';
+								characterLocationsList.style.columnCount = '3';
+								characterLocationsList.style.columnGap = '4px';
+							}
+						}
+
+						console.log('Vertical mode with location and boss disabled: hidden locations and boss tracker, expanded characters to 3 columns');
+					} else {
+						// Only location disabled: move characters under objectives
+						if (charactersSection && leftColumn) {
+							// Move characters section to left column (under objectives)
+							leftColumn.appendChild(charactersSection);
+
+							// Style it like the previous locations settings
+							charactersSection.style.width = '260px';
+							charactersSection.style.marginTop = '-6px';
+
+							if (characterLocationsList) {
+								characterLocationsList.style.width = '260px';
+								characterLocationsList.style.height = '147px';
+								characterLocationsList.style.display = 'block';
+								characterLocationsList.style.columnCount = '3';
+								characterLocationsList.style.columnGap = '4px';
+							}
+						}
+
+						// Make boss tracker 3 columns wide and expand vertically to fit all sprites
+						if (bossList) {
+							bossList.style.gridTemplateColumns = 'repeat(3, 1fr)';
+							bossList.style.height = 'auto';  // Expand vertically to fit all sprites
+						}
+
+						console.log('Vertical mode with location disabled: moved characters under objectives, styled to 260px x 147px, 3 columns, boss tracker 3 wide');
+					}
+				}
+				// Check if characters tracker is disabled
+				else if (typeof disablecharacterstracker !== 'undefined' && disablecharacterstracker === '1') {
+					// Characters disabled: move locations section directly under objectives in left column
+					const locationsSection = document.querySelector('.locations-section');
+					const locationsList = document.querySelector('.locations-list');
+
+					if (locationsSection && leftColumn) {
+						// Move locations section to left column (under objectives)
+						leftColumn.appendChild(locationsSection);
+
+						// Style it like the locations off settings
+						locationsSection.style.width = '260px';
+						locationsSection.style.marginTop = '-6px';
+
+						if (locationsList) {
+							locationsList.style.width = '260px';
+							locationsList.style.height = '147px';
+							locationsList.style.display = 'block';
+							locationsList.style.columnCount = '3';
+							locationsList.style.columnGap = '4px';
+						}
+					}
+
+					// Make boss tracker 3 columns wide and expand vertically to fit all sprites
+					if (bossList) {
+						bossList.style.gridTemplateColumns = 'repeat(3, 1fr)';
+						bossList.style.height = 'auto';
+					}
+
+					console.log('Vertical mode with characters disabled: moved locations under objectives, styled to 260px x 147px, 3 columns, boss tracker 3 wide');
+				}
+				// Check if boss tracker is disabled
+				else if (typeof disablebosstracker !== 'undefined' && disablebosstracker === '1') {
+					// Hide boss tracker section
+					if (bossSection) {
+						bossSection.style.display = 'none';
+					}
+
+					// Check if location tracker is also disabled
+					if (typeof disableloctracker !== 'undefined' && disableloctracker === '1') {
+						// Both boss and location disabled: hide locations, move characters to left column
+						const locationsSection = document.querySelector('.locations-section');
+						const charactersSection = document.querySelector('.characters-section');
+						const characterLocationsList = document.querySelector('.character-locations-list');
+
+						// Hide locations section
+						if (locationsSection) {
+							locationsSection.style.display = 'none';
+						}
+
+						// Move characters to left column and expand to 3 columns
+						if (charactersSection && leftColumn) {
+							leftColumn.appendChild(charactersSection);
+							charactersSection.style.width = '260px';
+							charactersSection.style.marginTop = '-6px';
+
+							if (characterLocationsList) {
+								characterLocationsList.style.width = '260px';
+								characterLocationsList.style.height = '147px';
+								characterLocationsList.style.display = 'block';
+								characterLocationsList.style.columnCount = '3';
+								characterLocationsList.style.columnGap = '4px';
+							}
+						}
+
+						console.log('Vertical mode with boss and location disabled: hidden boss tracker and locations, expanded characters to 3 columns');
+					}
+					// Check if characters tracker is also disabled
+					else if (typeof disablecharacterstracker !== 'undefined' && disablecharacterstracker === '1') {
+						// Both boss and characters disabled: expand locations to match objectives width, 3 columns
+						const locationsSection = document.querySelector('.locations-section');
+						const locationsList = document.querySelector('.locations-list');
+
+						if (locationsSection) {
+							locationsSection.style.width = '260px';  // Match objectives content width (260px - 8px padding)
+						}
+
+						if (locationsList) {
+							locationsList.style.width = '260px';
+							locationsList.style.height = '147px';  // 30% reduction from 210px
+							locationsList.style.display = 'block';  // Change from flex to block for column layout
+							locationsList.style.columnCount = '3';
+							locationsList.style.columnGap = '4px';
+						}
+
+						console.log('Vertical mode with boss and characters disabled: hidden boss tracker, expanded locations to 3 columns');
+					} else {
+						// Only boss disabled: move locations and characters to left column, keep them side by side
+						leftColumn.appendChild(locationsCharactersRow);
+						locationsCharactersRow.style.flexDirection = 'row';
+						console.log('Vertical mode with boss tracker disabled: hidden boss tracker, locations and characters side by side');
+					}
+				} else {
+					// Default vertical mode: move locations and characters under objectives in left column
+					leftColumn.appendChild(locationsCharactersRow);
+
+					// Boss tracker enabled: make it match objectives disabled layout (3 columns, 452px tall)
+					if (bossList) {
+						bossList.style.height = '452px';  // Match objectives disabled height
+						bossList.style.gridTemplateColumns = 'repeat(3, 1fr)';  // 3 columns wide
+					}
+
+					// Adjust boss section padding
+					if (bossSection) {
+						bossSection.style.padding = '4px';
+					}
+
+					console.log('Vertical mode enabled: moved locations+characters to left column, resized boss tracker (3x12)');
+				}
+			}
+		}
+	});
+	</script>
+
+	</body>
+</html>

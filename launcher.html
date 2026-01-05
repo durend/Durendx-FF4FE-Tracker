@@ -1,0 +1,141 @@
+<html>
+	<body bgcolor="#000063">
+		<head>
+			<title>FFIV Free Enterprise Tracker V3 Launcher - By Durendx</title>
+			<link rel="stylesheet" href="./styles/stylesheet.css?v=2303">
+			<script src="./scripts/launcher.js?v=2303"></script>
+			<script type="text/javascript" src="./scripts/jquery-3.3.1.js"></script>
+			<script type="text/javascript" src="./scripts/jquery.powertip.js"></script>
+			<script type="text/javascript" src="./scripts/bootstrap.min.js"></script>
+			<link rel="stylesheet" type="text/css" href="./styles/jquery.powertip.css" />
+			<style>
+				body { font-size: 27px; }
+			</style>
+			<!-- Global site tag (gtag.js) - Google Analytics -->
+			<script async src="https://www.googletagmanager.com/gtag/js?id=G-D0X6EZQ6RD"></script>
+			<script>
+			  window.dataLayer = window.dataLayer || [];
+			  function gtag(){dataLayer.push(arguments);}
+			  gtag('js', new Date());
+
+			  gtag('config', 'G-D0X6EZQ6RD');
+			</script>
+		</head>
+		
+		<div style="float: left; width: 400px; font-size: 18px;">
+			<img src="./images/ffivfebanner.png" style="width: 380px"><br>
+			<div style="font-size: 20px; color: white; margin: 8px 20px 0px 0px;">Final Fantasy IV: Free Enterprise Tracker<span style="font-size: 15px;"> V3</span><br>Configured for version 4.6.X + Galeswift</div><br><br>
+			<span style="text-decoration: underline;">Free Enterprise Home</span><br>
+			Visit the official site: <a href="http://ff4fe.com/" target="_blank">FF IV FE Official Site</a>
+			<br><br>
+			<span style="text-decoration: underline;">Special Thanks</span><br>
+			Special thanks to SchalaKitty for use of her item icons! You can find her tracker located at
+			<a href=" http://schala-kitty.net/ff4fe-tracker/" target="_blank">http://schala-kitty.net/ff4fe-tracker/</a>
+			<br>Special thanks to BigDunka for the original tracker foundation!
+			<br><br>
+			<span style="text-decoration: underline;">Suggestions or comments?</span><br>
+			Reach me in Discord: Durendx<br>Thank you!
+		</div>
+		
+		<div style="width: 624px; float: left; margin-left: 40px;">
+			<center><span style="font-size: 22px;">V&nbsp&nbsp&nbsp&nbspPaste Your Flags Here&nbsp&nbsp&nbsp&nbspV</span></center>
+			<textarea style="width: 100%; height: 100px; box-shadow: 0 0 4px 2px rgba(255, 255, 255, 1.0); margin-top: 8px;" placeholder="Paste Flags Here" id="flags" ></textarea><br>
+
+			<center><span style="font-size: 22px;">Random Objectives (One Per Line)</span></center>
+			<textarea style="width: 100%; height: 100px; box-shadow: 0 0 4px 2px rgba(255, 255, 255, 1.0); margin-top: 8px;" placeholder="Enter any random objectives here (one per line)&#10;These will appear below flag-based objectives" id="manualobjectives" ></textarea><br><br>
+			<div style="margin: auto; width: 100%; font-size: 22px; background-color: rgb(0, 0, 130); border: white; border-style: solid; border-width: 2px;">
+				<div style=" padding: 10px;">
+					<center>
+						<button type="button" onclick="launch()" style="width: 300px; text-align: center; font-size: 36px; font-family: 'AgencyFB', sans-serif; font-weight: bold;">LAUNCH TRACKER</button><br><br>
+						<span style="font-size: 28px; text-decoration: underline;">Optional Flags</span><br>
+						
+						
+						<table>
+							<tr style="text-align: left;">
+								<td style="width: 380px;">
+									<span style="font-size: 24px">Disable Current Party</span> <span class="south" title="This disables current party tracking" style="font-size: 16px; color: red; cursor: pointer;">[?]</span>
+									<label class="switch">
+										<input id="charswitch" name="charswitch" type="checkbox">
+										<span class="slider round"></span>
+									</label>
+								</td>
+								<td style="width: 20px;">
+								</td>
+								<td style="width: 290px;">
+									<span style="font-size: 24px">Vertical Mode</span> <span class="south" title="Enables vertical layout mode" style="font-size: 16px; color: red; cursor: pointer;">[?]</span>
+									<label class="switch">
+										<input id="verticalmodeswitch" name="verticalmodeswitch" type="checkbox">
+										<span class="slider round"></span>
+									</label>
+								</td>
+							</tr>
+
+							<tr style="text-align: left;">
+								<td>
+									<span style="font-size: 24px">Disable Objective Tracking</span> <span class="south" title="This disables objective tracking" style="font-size: 16px; color: red; cursor: pointer;">[?]</span>
+									<label class="switch">
+										<input id="objswitch" name="objswitch" type="checkbox">
+										<span class="slider round"></span>
+									</label>
+								</td>
+								<td>
+								</td>
+								<td>
+									<span style="font-size: 24px">Use Auto-Tracking</span> <span class="south" title="Activates auto-tracking" style="font-size: 16px; color: red; cursor: pointer;">[?]</span>
+									<label class="switch">
+										<input id="autotrackingswitch" name="autotrackingswitch" type="checkbox">
+										<span class="slider round"></span>
+									</label>
+								</td>
+							</tr>
+
+							<tr style="text-align: left;">
+								<td>
+									<span style="font-size: 24px">Disable Location Tracking</span> <span class="south" title="This disables the logic for each key item, character, town, and trapped chest, to give the ability to check off locations before they are accessible" style="font-size: 16px; color: red; cursor: pointer;">[?]</span>
+									<label class="switch">
+										<input id="locswitch" name="locswitch" type="checkbox">
+										<span class="slider round"></span>
+									</label>
+								</td>
+								<td>
+								</td>
+								<td>
+									<span style="font-size: 24px">Auto-Tracking Port</span> <span class="south" title="Set the auto-tracking port, if active. Defaults to 8080." style="font-size: 16px; color: red; cursor: pointer;">[?]</span>
+									<input id="autotrackingport" type="text" style="width: 60px; height: 26px; float: right;" value="8080"><br>
+								</td>
+							</tr>
+
+							<tr style="text-align: left;">
+								<td>
+									<span style="font-size: 24px">Disable Characters Tracking</span> <span class="south" title="This disables character tracking" style="font-size: 16px; color: red; cursor: pointer;">[?]</span>
+									<label class="switch">
+										<input id="charactersswitch" name="charactersswitch" type="checkbox">
+										<span class="slider round"></span>
+									</label>
+								</td>
+								<td>
+								</td>
+								<td>
+								</td>
+							</tr>
+
+							<tr style="text-align: left;">
+								<td>
+									<span style="font-size: 24px">Disable Boss Tracker</span> <span class="south" title="This disables boss tracking" style="font-size: 16px; color: red; cursor: pointer;">[?]</span>
+									<label class="switch">
+										<input id="bossswitch" name="bossswitch" type="checkbox">
+										<span class="slider round"></span>
+									</label>
+								</td>
+								<td>
+								</td>
+								<td>
+								</td>
+							</tr>
+						</table>
+					</center>
+				</div>
+			</div>
+		</div>
+	</body>
+</html>
