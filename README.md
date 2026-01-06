@@ -58,7 +58,7 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
    - Run QUsb2Snes - it will start a WebSocket server on port 8080
 
 2. **Configure Your Emulator**
-   - **BizHawk**: Load the QUsb2Snes Lua script
+   - **BizHawk**: Install [Emulator Network Access plugin](https://github.com/Skarsnik/Bizhawk-nwa-tool/releases) to `ExternalTools` folder, then enable via `Tools→External Tools` menu
    - **RetroArch**: Enable network commands in settings
    - **snes9x-emunwa**: No configuration needed
 
@@ -87,7 +87,8 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
    - **Other Distros**: Download `bizhawk-monort` from [BizHawk Releases](https://github.com/TASEmulators/BizHawk/releases)
    - Requirements: Mono (complete), OpenAL, Lua 5.4, glibc, lsb_release
    - Run with: `./EmuHawkMono.sh`
-   - Install QUsb2Snes Lua script for network access
+   - Install [Emulator Network Access plugin](https://github.com/Skarsnik/Bizhawk-nwa-tool/releases) to `ExternalTools` folder
+   - Enable plugin via `Tools→External Tools` menu in BizHawk
    - **Note**: Network functionality for QUsb2Snes has not been extensively tested on Linux builds
 
    **Option B: RetroArch (Recommended)**
