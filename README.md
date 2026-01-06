@@ -99,6 +99,7 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
    - The tracker will automatically connect and sync
 
 **Linux Notes:**
+- **BizHawk is Windows-only** and not natively supported on Linux. While it may work through Wine/Proton, networking functionality for QUsb2Snes is not guaranteed. **RetroArch is strongly recommended for Linux users** as the primary auto-tracking solution.
 - Config files stored in: `$HOME/.config/skarsnik.nyo.fr/QUsb2Snes.conf`
 - Logs stored in: `$HOME/.local/share/QUsb2Snes`
 - If you have serial device issues, you may need to adjust TTY settings (see QUsb2Snes documentation)
