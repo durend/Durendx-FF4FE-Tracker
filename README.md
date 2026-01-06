@@ -85,7 +85,8 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
    - Set: `network_cmd_enable = "true"`
    - Save and restart RetroArch
    - In QUsb2Snes, activate the RetroArch device from the devices menu
-   - Use Snes9x or bsnes-mercury core
+   - **Use bsnes-mercury core (recommended)** or Snes9x core
+   - bsnes-mercury provides better ROM data access for auto-tracking
 
 3. **Start the Tracker**
    - Open `launcher.html` in Firefox, Chrome, or any browser
