@@ -80,7 +80,17 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
    - **Other Distros**: Download from [GitHub Releases](https://github.com/Skarsnik/QUsb2snes/releases) or build from source
    - Run QUsb2Snes - it will start a WebSocket server on port 8080
 
-2. **Configure RetroArch** (Recommended for Linux)
+2. **Choose Your Emulator**
+
+   **Option A: BizHawk (Native Linux Build)**
+   - **Arch Linux**: Install from AUR: `yay -S bizhawk-bin` or `paru -S bizhawk-bin`
+   - **Other Distros**: Download `bizhawk-monort` from [BizHawk Releases](https://github.com/TASEmulators/BizHawk/releases)
+   - Requirements: Mono (complete), OpenAL, Lua 5.4, glibc, lsb_release
+   - Run with: `./EmuHawkMono.sh`
+   - Install QUsb2Snes Lua script for network access
+   - **Note**: Network functionality for QUsb2Snes has not been extensively tested on Linux builds
+
+   **Option B: RetroArch (Recommended)**
    - Edit RetroArch config: `~/.config/retroarch/retroarch.cfg`
    - Set: `network_cmd_enable = "true"`
    - Save and restart RetroArch
@@ -96,11 +106,11 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
    - Click "Launch Tracker"
 
 4. **Load Your ROM**
-   - Start your FF4 Free Enterprise ROM in RetroArch
+   - Start your FF4 Free Enterprise ROM in your chosen emulator
    - The tracker will automatically connect and sync
 
 **Linux Notes:**
-- **BizHawk is Windows-only** and not natively supported on Linux. While it may work through Wine/Proton, networking functionality for QUsb2Snes is not guaranteed. **RetroArch is strongly recommended for Linux users** as the primary auto-tracking solution.
+- **BizHawk Linux builds are available** but are considered experimental. Network functionality may vary. RetroArch is still recommended for most users due to proven QUsb2Snes compatibility.
 - Config files stored in: `$HOME/.config/skarsnik.nyo.fr/QUsb2Snes.conf`
 - Logs stored in: `$HOME/.local/share/QUsb2Snes`
 - If you have serial device issues, you may need to adjust TTY settings (see QUsb2Snes documentation)
