@@ -51,9 +51,11 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
 
 #### Setup Instructions
 
+##### Windows
+
 1. **Install QUsb2Snes**
-   - Download and run QUsb2Snes
-   - It will start a WebSocket server on port 8080
+   - Download from [GitHub Releases](https://github.com/Skarsnik/QUsb2snes/releases)
+   - Run QUsb2Snes - it will start a WebSocket server on port 8080
 
 2. **Configure Your Emulator**
    - **BizHawk**: Load the QUsb2Snes Lua script
@@ -70,6 +72,36 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
 4. **Load Your ROM**
    - Start your FF4 Free Enterprise ROM in the emulator
    - The tracker will automatically connect and sync
+
+##### Linux
+
+1. **Install QUsb2Snes**
+   - **Arch Linux**: Install from AUR: `yay -S qusb2snes` or `paru -S qusb2snes`
+   - **Other Distros**: Download from [GitHub Releases](https://github.com/Skarsnik/QUsb2snes/releases) or build from source
+   - Run QUsb2Snes - it will start a WebSocket server on port 8080
+
+2. **Configure RetroArch** (Recommended for Linux)
+   - Edit RetroArch config: `~/.config/retroarch/retroarch.cfg`
+   - Set: `network_cmd_enable = "true"`
+   - Save and restart RetroArch
+   - In QUsb2Snes, activate the RetroArch device from the devices menu
+   - Use Snes9x or bsnes-mercury core
+
+3. **Start the Tracker**
+   - Open `launcher.html` in Firefox, Chrome, or any browser
+   - Enter your flag string
+   - Check "Enable Auto-Tracking"
+   - Set port to `8080` (default)
+   - Click "Launch Tracker"
+
+4. **Load Your ROM**
+   - Start your FF4 Free Enterprise ROM in RetroArch
+   - The tracker will automatically connect and sync
+
+**Linux Notes:**
+- Config files stored in: `$HOME/.config/skarsnik.nyo.fr/QUsb2Snes.conf`
+- Logs stored in: `$HOME/.local/share/QUsb2Snes`
+- If you have serial device issues, you may need to adjust TTY settings (see QUsb2Snes documentation)
 
 ## Technical Details
 
