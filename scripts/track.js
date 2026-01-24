@@ -1936,71 +1936,126 @@ function ApplyChecks(){
 		}
 		
 		// ****Characters****
-		//Baron Castle
-		DeactivateCharacterLocation(CharacterCheck.BARON_CASTLE);
-		if (keyitems[KeyItem.BARON_KEY] === true || modeflags.opushbtojump) {
-			ActivateCharacterLocation(CharacterCheck.BARON_CASTLE);
+		//Baron Castle (earned - hidden by Cnoearned)
+		if (modeflags.cnoearned) {
+			if (characterlocations[CharacterCheck.BARON_CASTLE] !== 2) characterlocations[CharacterCheck.BARON_CASTLE] = 3;
+		} else {
+			DeactivateCharacterLocation(CharacterCheck.BARON_CASTLE);
+			if (keyitems[KeyItem.BARON_KEY] === true || modeflags.opushbtojump) {
+				ActivateCharacterLocation(CharacterCheck.BARON_CASTLE);
+			}
 		}
 
-		//Town of Baron
-		ActivateCharacterLocation(CharacterCheck.BARON_INN);
-
-		//Damcyan
-		ActivateCharacterLocation(CharacterCheck.DAMCYAN);
-
-		//Eblan Cave
-		DeactivateCharacterLocation(CharacterCheck.EBLAN_CAVE);
-		if (keyitems[KeyItem.HOOK] === true || modeflags.opushbtojump) {
-			ActivateCharacterLocation(CharacterCheck.EBLAN_CAVE);
+		//Town of Baron (earned - hidden by Cnoearned)
+		if (modeflags.cnoearned) {
+			if (characterlocations[CharacterCheck.BARON_INN] !== 2) characterlocations[CharacterCheck.BARON_INN] = 3;
+		} else {
+			ActivateCharacterLocation(CharacterCheck.BARON_INN);
 		}
 
-		//Giant of Babil
-		DeactivateCharacterLocation(CharacterCheck.GIANT_BABIL);
-		if (keyitems[KeyItem.DARKNESS_CRYSTAL] === true) {
-			ActivateCharacterLocation(CharacterCheck.GIANT_BABIL);
+		//Damcyan (free - hidden by Cnofree)
+		if (modeflags.cnofree) {
+			if (characterlocations[CharacterCheck.DAMCYAN] !== 2) characterlocations[CharacterCheck.DAMCYAN] = 3;
+		} else {
+			ActivateCharacterLocation(CharacterCheck.DAMCYAN);
 		}
 
-		//Kaipo
-		DeactivateCharacterLocation(CharacterCheck.KAIPO);
-		if (keyitems[KeyItem.SANDRUBY] === true) {
-			ActivateCharacterLocation(CharacterCheck.KAIPO);
+		//Eblan Cave (earned - hidden by Cnoearned)
+		if (modeflags.cnoearned) {
+			if (characterlocations[CharacterCheck.EBLAN_CAVE] !== 2) characterlocations[CharacterCheck.EBLAN_CAVE] = 3;
+		} else {
+			DeactivateCharacterLocation(CharacterCheck.EBLAN_CAVE);
+			if (keyitems[KeyItem.HOOK] === true || modeflags.opushbtojump) {
+				ActivateCharacterLocation(CharacterCheck.EBLAN_CAVE);
+			}
 		}
 
-		//Mist Village
-		DeactivateCharacterLocation(CharacterCheck.MIST);
-		if (keyitems[KeyItem.PACKAGE] === true) {
-			ActivateCharacterLocation(CharacterCheck.MIST);
+		//Giant of Babil (earned - hidden by Cnoearned)
+		if (modeflags.cnoearned) {
+			if (characterlocations[CharacterCheck.GIANT_BABIL] !== 2) characterlocations[CharacterCheck.GIANT_BABIL] = 3;
+		} else {
+			DeactivateCharacterLocation(CharacterCheck.GIANT_BABIL);
+			if (keyitems[KeyItem.DARKNESS_CRYSTAL] === true) {
+				ActivateCharacterLocation(CharacterCheck.GIANT_BABIL);
+			}
 		}
 
-		//Mt Hobbs
-		ActivateCharacterLocation(CharacterCheck.MT_HOBS);
-
-		//Mt Ordeals
-		ActivateCharacterLocation(CharacterCheck.MT_ORDEALS);
-
-		//Mysidia
-		ActivateCharacterLocation(CharacterCheck.MYSIDIA);
-
-		//Tower of Zot
-		DeactivateCharacterLocation(CharacterCheck.TOWER_ZOT);
-		if (keyitems[KeyItem.EARTH_CRYSTAL] === true || modeflags.opushbtojump) {
-			ActivateCharacterLocation(CharacterCheck.TOWER_ZOT);
+		//Kaipo (earned - hidden by Cnoearned)
+		if (modeflags.cnoearned) {
+			if (characterlocations[CharacterCheck.KAIPO] !== 2) characterlocations[CharacterCheck.KAIPO] = 3;
+		} else {
+			DeactivateCharacterLocation(CharacterCheck.KAIPO);
+			if (keyitems[KeyItem.SANDRUBY] === true) {
+				ActivateCharacterLocation(CharacterCheck.KAIPO);
+			}
 		}
 
-		//Waterway
-		ActivateCharacterLocation(CharacterCheck.WATERWAY);
-
-		//Dwarf Castle
-		DeactivateCharacterLocation(CharacterCheck.DWARF);
-		if (hasunderworldaccess) {
-			ActivateCharacterLocation(CharacterCheck.DWARF);
+		//Mist Village (earned - hidden by Cnoearned)
+		if (modeflags.cnoearned) {
+			if (characterlocations[CharacterCheck.MIST] !== 2) characterlocations[CharacterCheck.MIST] = 3;
+		} else {
+			DeactivateCharacterLocation(CharacterCheck.MIST);
+			if (keyitems[KeyItem.PACKAGE] === true) {
+				ActivateCharacterLocation(CharacterCheck.MIST);
+			}
 		}
 
+		//Mt Hobbs (earned - hidden by Cnoearned)
+		if (modeflags.cnoearned) {
+			if (characterlocations[CharacterCheck.MT_HOBS] !== 2) characterlocations[CharacterCheck.MT_HOBS] = 3;
+		} else {
+			ActivateCharacterLocation(CharacterCheck.MT_HOBS);
+		}
 
-		//Lunar Sub.
-		DeactivateCharacterLocation(CharacterCheck.MOON);
-		if (keyitems[KeyItem.DARKNESS_CRYSTAL] === true) {
-			ActivateCharacterLocation(CharacterCheck.MOON);
+		//Mt Ordeals (free - hidden by Cnofree)
+		if (modeflags.cnofree) {
+			if (characterlocations[CharacterCheck.MT_ORDEALS] !== 2) characterlocations[CharacterCheck.MT_ORDEALS] = 3;
+		} else {
+			ActivateCharacterLocation(CharacterCheck.MT_ORDEALS);
+		}
+
+		//Mysidia (free - hidden by Cnofree)
+		if (modeflags.cnofree) {
+			if (characterlocations[CharacterCheck.MYSIDIA] !== 2) characterlocations[CharacterCheck.MYSIDIA] = 3;
+		} else {
+			ActivateCharacterLocation(CharacterCheck.MYSIDIA);
+		}
+
+		//Tower of Zot (earned - hidden by Cnoearned)
+		if (modeflags.cnoearned) {
+			if (characterlocations[CharacterCheck.TOWER_ZOT] !== 2) characterlocations[CharacterCheck.TOWER_ZOT] = 3;
+		} else {
+			DeactivateCharacterLocation(CharacterCheck.TOWER_ZOT);
+			if (keyitems[KeyItem.EARTH_CRYSTAL] === true || modeflags.opushbtojump) {
+				ActivateCharacterLocation(CharacterCheck.TOWER_ZOT);
+			}
+		}
+
+		//Waterway (free - hidden by Cnofree)
+		if (modeflags.cnofree) {
+			if (characterlocations[CharacterCheck.WATERWAY] !== 2) characterlocations[CharacterCheck.WATERWAY] = 3;
+		} else {
+			ActivateCharacterLocation(CharacterCheck.WATERWAY);
+		}
+
+		//Dwarf Castle (earned - hidden by Cnoearned)
+		if (modeflags.cnoearned) {
+			if (characterlocations[CharacterCheck.DWARF] !== 2) characterlocations[CharacterCheck.DWARF] = 3;
+		} else {
+			DeactivateCharacterLocation(CharacterCheck.DWARF);
+			if (hasunderworldaccess) {
+				ActivateCharacterLocation(CharacterCheck.DWARF);
+			}
+		}
+
+		//Lunar Sub. (earned - hidden by Cnoearned)
+		if (modeflags.cnoearned) {
+			if (characterlocations[CharacterCheck.MOON] !== 2) characterlocations[CharacterCheck.MOON] = 3;
+		} else {
+			DeactivateCharacterLocation(CharacterCheck.MOON);
+			if (keyitems[KeyItem.DARKNESS_CRYSTAL] === true) {
+				ActivateCharacterLocation(CharacterCheck.MOON);
+			}
 		}	
 
 	
