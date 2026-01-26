@@ -182,6 +182,14 @@ Comprehensive support for FF4FE flags including:
 - Fixed manual tracking stability (locations no longer flicker)
 - Fixed ApplyChecks initialization on page load
 
+## Changes (v1.01)
+
+- Fixed Cnoearned/Cnofree character location visibility bug - character locations now properly stay hidden when tracker is reloaded during auto-tracking
+
+## Changes (v1.02)
+
+- Added boss name tooltips - hover over any boss icon to see its full name
+
 ## Credits
 
 - **Original Tracker**: Created by [Dunka](https://github.com/Dunkalunk)
@@ -207,5 +215,5 @@ For issues, questions, or feature requests:
 
 ---
 
-**Version**: 1.0.0
+**Version**: 1.02
 **Last Updated**: January 2026
