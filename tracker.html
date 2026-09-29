@@ -494,6 +494,92 @@
 				}
 			}
 
+			// Count how many key items have been checked off, for Omode:ki tracking
+			function countCheckedKeyItems() {
+				let count = 0;
+				if (typeof keyitems !== 'undefined') {
+					for (let k = 0; k < keyitems.length; k++) {
+						if (keyitems[k] === true || keyitems[k] === 1) {
+							count++;
+						}
+					}
+				}
+				return count;
+			}
+
+			// Build the "Seed Notes" panel for flags that don't map to a countable objective:
+			// Ctreasure, Kstart, Ogated/Ohardreq, and shop flags (Sprice/Ssame/Ssingles/Smixed).
+			function updateSeedNotes() {
+				const seedNotesDiv = document.getElementById('seednotesdiv');
+				const seedNotesList = document.getElementById('seednoteslist');
+				if (!seedNotesDiv || !seedNotesList || typeof modeflags === 'undefined') return;
+
+				let notes = [];
+
+				const ctreasureText = {
+					free: 'Free characters are found in treasure chests (restricted characters in MIABs)',
+					earned: 'Earned characters are found in treasure chests (restricted characters in MIABs)',
+					unsafe: 'Characters may be placed anywhere in the underworld/overworld/moon',
+					relaxed: 'Restricted characters can be in any chest; no characters in MIABs'
+				};
+				if (modeflags.ctreasure && ctreasureText[modeflags.ctreasure]) {
+					notes.push('Ctreasure: ' + ctreasureText[modeflags.ctreasure]);
+				}
+
+				if (modeflags.kstart && modeflags.kstart.length > 0) {
+					let names = modeflags.kstart.map(k => k.charAt(0).toUpperCase() + k.slice(1));
+					notes.push('Starting key item(s): ' + names.join(', '));
+				}
+
+				function resolveSlot(slot) {
+					let name = modeflags.objectiveSlotNames && modeflags.objectiveSlotNames[slot];
+					return name ? formatObjectiveName(name) : ('slot ' + slot);
+				}
+
+				if (modeflags.ogated && modeflags.ogated.length > 0) {
+					notes.push('Gated objective(s) (reward granted automatically on completion of other objectives): ' +
+						modeflags.ogated.map(resolveSlot).join(', '));
+				}
+
+				if (modeflags.ohardreq && modeflags.ohardreq.length > 0) {
+					notes.push('Hard-required objective(s) (must be included in the required count): ' +
+						modeflags.ohardreq.map(resolveSlot).join(', '));
+				}
+
+				if (modeflags.ssame) {
+					notes.push('Ssame: all shops sell the same single item');
+				}
+				if (modeflags.ssingles) {
+					notes.push('Ssingles: shops sell only a single item each');
+				}
+				if (modeflags.smixed === 'shaken') {
+					notes.push('Smixed:shaken - shop contents fully randomized (includes key items/0gp items)');
+				} else if (modeflags.smixed === 'stirred') {
+					notes.push('Smixed:stirred - shop contents randomized (excludes key items/0gp items)');
+				}
+				if (modeflags.sprice) {
+					notes.push('Sprice: shop item prices set to ' + modeflags.sprice + '%');
+				}
+				if (modeflags.spricey && modeflags.spricey.length > 0) {
+					notes.push('Spricey: randomized prices for ' + modeflags.spricey.join(', '));
+				}
+
+				if (notes.length === 0) {
+					seedNotesDiv.style.display = 'none';
+					seedNotesList.innerHTML = '';
+					return;
+				}
+
+				seedNotesDiv.style.display = '';
+				seedNotesList.innerHTML = '';
+				for (let note of notes) {
+					let noteItem = document.createElement('div');
+					noteItem.className = 'objective-item';
+					noteItem.textContent = note;
+					seedNotesList.appendChild(noteItem);
+				}
+			}
+
 			// Generate objectives from parsed modeflags
 			function generateObjectivesFromFlags() {
 				let generatedObjectives = [];
@@ -506,6 +592,21 @@
 				// Gold Hunter
 				if (typeof modeflags !== 'undefined' && modeflags.ogoldhunter && modeflags.ogoldhuntercount) {
 					generatedObjectives.push(`Collect ${modeflags.ogoldhuntercount} Gold`);
+				}
+
+				// Dark Matter Hunt
+				if (typeof modeflags !== 'undefined' && modeflags.odarkmatter && modeflags.odarkmattercount) {
+					generatedObjectives.push(`Collect ${modeflags.odarkmattercount} Dark Matter`);
+				}
+
+				// Key Item Hunter (Omode:ki)
+				if (typeof modeflags !== 'undefined' && modeflags.oki && modeflags.okicount) {
+					generatedObjectives.push(`Obtain ${modeflags.okicount} Key Items`);
+				}
+
+				// External/meta objective (Omode:external) - no auto-tracking possible, manual toggle only
+				if (typeof modeflags !== 'undefined' && modeflags.oexternal) {
+					generatedObjectives.push(`Complete External Objective`);
 				}
 
 				// Add objectives from objectiveGroups (parsed from Omode flags)
@@ -551,8 +652,10 @@
 						// Check if this objective requires a count
 						let bossMatch = generatedObjs[i].match(/Defeat (\d+) [Bb]osses?/i);
 						let goldMatch = generatedObjs[i].match(/Collect (\d+) [Gg]old/i);
+						let dmMatch = generatedObjs[i].match(/Collect (\d+) [Dd]ark [Mm]atter/i);
+						let kiMatch = generatedObjs[i].match(/Obtain (\d+) [Kk]ey [Ii]tems/i);
 
-						if (bossMatch || goldMatch) {
+						if (bossMatch || goldMatch || dmMatch) {
 							// Create container for objective with counter controls
 							let objText = document.createElement('span');
 							objText.className = 'objective-text';
@@ -569,6 +672,7 @@
 								e.stopPropagation();
 								if (bossMatch) BossTicker(-1);
 								else if (goldMatch) GoldTicker(-1);
+								else if (dmMatch) DMTicker(-1);
 								updateObjectivesList();
 							};
 
@@ -580,6 +684,9 @@
 							} else if (goldMatch) {
 								let target = parseInt(goldMatch[1]);
 								countDisplay.textContent = `${goldcount}/${target}`;
+							} else if (dmMatch) {
+								let target = parseInt(dmMatch[1]);
+								countDisplay.textContent = `${dmcount}/${target}`;
 							}
 
 							let upArrow = document.createElement('button');
@@ -589,6 +696,7 @@
 								e.stopPropagation();
 								if (bossMatch) BossTicker(1);
 								else if (goldMatch) GoldTicker(1);
+								else if (dmMatch) DMTicker(1);
 								updateObjectivesList();
 							};
 
@@ -602,7 +710,29 @@
 							// Check completion: auto-complete if count reached OR manually toggled
 							if ((bossMatch && bosscount >= parseInt(bossMatch[1])) ||
 							    (goldMatch && goldcount >= parseInt(goldMatch[1])) ||
+							    (dmMatch && dmcount >= parseInt(dmMatch[1])) ||
 							    generatedObjectivesCompleted[i]) {
+								objItem.classList.add('completed');
+								completedCount++;
+							}
+						} else if (kiMatch) {
+							// Key item count is tracked automatically from the Key Items panel - no manual ticker needed
+							let target = parseInt(kiMatch[1]);
+							let current = countCheckedKeyItems();
+
+							let objText = document.createElement('span');
+							objText.className = 'objective-text';
+							objText.textContent = generatedObjs[i];
+							objText.onclick = () => toggleGeneratedObjective(i);
+
+							let countDisplay = document.createElement('span');
+							countDisplay.className = 'counter-display';
+							countDisplay.textContent = `${current}/${target}`;
+
+							objItem.appendChild(objText);
+							objItem.appendChild(countDisplay);
+
+							if (current >= target || generatedObjectivesCompleted[i]) {
 								objItem.classList.add('completed');
 								completedCount++;
 							}
@@ -796,6 +926,8 @@
 			}
 
 				objectiveCounter.textContent = `${completedCount}/${totalCount}`;
+
+				updateSeedNotes();
 			}
 
 			function toggleManualObjective(i) {
@@ -886,6 +1018,14 @@
 					<div class="section-header">OBJECTIVES <span id="objectivecounter" class="header-counter"></span></div>
 					<div id="objectiveslist" class="objectives-list">
 						<!-- Objectives will be populated by JavaScript -->
+					</div>
+				</div>
+
+				<!-- SEED NOTES (Ctreasure, Kstart, Ogated/Ohardreq, shop flags) -->
+				<div id="seednotesdiv" class="section" style="display: none;">
+					<div class="section-header">SEED NOTES</div>
+					<div id="seednoteslist" class="objectives-list">
+						<!-- Populated by JavaScript from modeflags -->
 					</div>
 				</div>
 

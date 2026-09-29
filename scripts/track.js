@@ -154,7 +154,22 @@ var modeflags = {
 	ovanillafashion: false,
 	ovanillatraps: false,
 	ovanillaz: false,
-	opushbtojump: false
+	opushbtojump: false,
+	// Galeswift v4.6.4 / DoorsRando additions
+	odarkmattercount: 0,
+	oki: false,
+	okicount: 0,
+	oexternal: false,
+	ogated: [],
+	ohardreq: [],
+	objectiveSlotNames: {},
+	ctreasure: '',
+	kstart: [],
+	ssame: false,
+	ssingles: false,
+	smixed: '',
+	sprice: '',
+	spricey: []
 }
 
 //NEW FLAGS
@@ -213,7 +228,7 @@ function SetModes() {
 
 	disablecharacterstracker = getParameterByName('k');
 
-	if (getParameterByName('a').startsWith('1')) {
+	if ((getParameterByName('a') || '').startsWith('1')) {
 		enableautotracking = '1';
 		autotrackingport = getParameterByName('a').substr(1);
 	} else {
@@ -413,7 +428,26 @@ function SetModes() {
 											console.log('DKMATTER case triggered - setting odarkmatter to true');
 											modeflags.odarkmatter = true;
 											objectives[3] = 0;
+											// Extract number if present (e.g., dkmatter25) - Galeswift v4.6.4 numbered variants
+											var fullMode = mode[j].split('/')[0];
+											var dmMatch = fullMode.match(/dkmatter(\d+)/i);
+											if (dmMatch && dmMatch[1]) {
+												modeflags.odarkmattercount = parseInt(dmMatch[1]);
+											}
 											//document.getElementById('dkmatterspan').style.display = 'inherit';
+											break;
+										case 'KI':
+											// Omode:ki1-ki17 (Galeswift v4.6.4) - obtain N key items to win
+											modeflags.oki = true;
+											var fullMode = mode[j].split('/')[0];
+											var kiMatch = fullMode.match(/ki(\d+)/i);
+											if (kiMatch && kiMatch[1]) {
+												modeflags.okicount = parseInt(kiMatch[1]);
+											}
+											break;
+										case 'EXTERNAL':
+											// Omode:external (Galeswift v4.6.4) - meta/bingo-style objective, no auto-tracking possible
+											modeflags.oexternal = true;
 											break;
 										case 'BOSSCOLLECTOR':
 											console.log('BOSSCOLLECTOR case triggered - setting obosscollector to true');
@@ -488,8 +522,21 @@ function SetModes() {
 							} else if (keys[k].startsWith('REQ')) {
 								var questreq = keys[k].substring(4);
 								modeflags.oreq = questreq;
+							} else if (keys[k].startsWith('GATED:')) {
+								// Ogated:N (Galeswift v4.6.4) - objective slot N's reward is only granted once all required objectives are complete
+								var gatedSlot = parseInt(keys[k].substring(6));
+								if (!isNaN(gatedSlot)) modeflags.ogated.push(gatedSlot);
+							} else if (keys[k].startsWith('HARDREQ:')) {
+								// Ohardreq:N (Galeswift v4.6.4) - objective slot N must be included among the required objectives
+								var hardreqSlot = parseInt(keys[k].substring(8));
+								if (!isNaN(hardreqSlot)) modeflags.ohardreq.push(hardreqSlot);
 							} else {
 								var currentkey = keys[k].substr(2).toLowerCase();
+								// Track which named objective occupies each slot number, so Ogated/Ohardreq (which reference slots) can be resolved to a name for display
+								var slotMatch = keys[k].match(/^(\d+):/);
+								if (slotMatch) {
+									modeflags.objectiveSlotNames[parseInt(slotMatch[1])] = currentkey;
+								}
 								switch (currentkey) {
 									case 'char_cecil':
 										objectives[4] = 0;
@@ -778,6 +825,10 @@ function SetModes() {
 					} else if (key === 'NOFREE') {
 						modeflags.knofree = true;
 						continue;
+					} else if (key.startsWith('START:')) {
+						// Kstart:package/sandruby/.../darkness/pass/zonk - specifies a starting key item
+						modeflags.kstart.push(key.substring(6).toLowerCase());
+						continue;
 					}
 
 					switch (key) {
@@ -881,6 +932,10 @@ function SetModes() {
 							break;
 						case 'PERMADEADER':
 							modeflags.cpermadeader = true;
+							break;
+						case 'TREASURE':
+							// Ctreasure:free/earned/unsafe/relaxed - characters found in treasure chests instead of the usual locations
+							modeflags.ctreasure = keys[k].split(':')[1] ? keys[k].split(':')[1].toLowerCase() : '';
 							break;
 						default:
 							if (keys[k].startsWith('DISTINCT')) {
@@ -1105,10 +1160,31 @@ function SetModes() {
 						case 'UNSAFE':
 							modeflags.sunsafe = true;
 							break;
+						case 'SAME':
+							// Ssame - shops only sell a single item, and all shops in the game are the same
+							modeflags.ssame = true;
+							break;
+						case 'SINGLES':
+							// Ssingles - shops only sell a single item, following standard randomization rules
+							modeflags.ssingles = true;
+							break;
+					}
+					// Value-bearing shop flags (not exact-match, so handled outside the switch above)
+					if (keys[k].startsWith('MIXED:')) {
+						// Smixed:shaken/stirred - shop prices/contents are randomized (shaken = includes key items/0gp items)
+						modeflags.smixed = keys[k].substring(6).toLowerCase();
+					}
+					if (keys[k].startsWith('PRICE:')) {
+						// Sprice:NN - forces shop item prices to a specific percentage
+						modeflags.sprice = keys[k].substring(6);
+					}
+					if (keys[k].startsWith('PRICEY:')) {
+						// Spricey:items/weapons/armor - randomizes prices for a specific item category
+						modeflags.spricey.push(keys[k].substring(7).toLowerCase());
 					}
 				}
 			}
-			
+
 			//Bosses
 			if (flagsets[fs].startsWith('B')) {
 				var flagstring = flagsets[fs].substr(1);
@@ -3043,7 +3119,7 @@ function ClearWarpGlitch() {
 function DMTicker(delta) {
 	dmcount += delta;
 	if (dmcount < 0) { dmcount = 0 };
-	if (dmcount > 30) { dmcount = 30 };
+	if (dmcount > 45) { dmcount = 45 };
 	document.getElementById('dmcountspan').innerHTML = dmcount;
 }
 
