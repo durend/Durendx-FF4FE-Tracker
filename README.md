@@ -205,6 +205,20 @@ fork-specific flag combinations load cleanly).
   and shop flags (`Sprice`, `Spricey`, `Smixed`, `Ssame`, `Ssingles`)
 - Multiple random objective pools (`Orandom2:`, `Orandom3:`) and `tough_quest`
 
+**New features**
+- **XP modifier** on the left of the Key Items header (e.g. `XP:1.5x`), based
+  on key items gained and the seed's X flags: x2 at 10 key items (unless
+  `Xnokeybonus`), `Xcrystalbonus`, `Xkicheckbonus:N` and `Xobjectivebonus:N`.
+  Hover it to see which bonuses apply
+- **Auto boss tracking**: with auto-tracking on, each boss is marked defeated
+  in the Boss Tracker as soon as you win the fight (works with boss rando and
+  `Balt:gauntlet`). New **Auto-Track Bosses** toggle in the launcher (on by
+  default). Bosses beaten before connecting still need a click
+- **Pass auto-tracks** (read from your inventory, since the game keeps no
+  "found" flag for it), however you get it: `Pkey`, shop, chest or `Kstart:pass`
+- New **Dwarf Castle [Cid]** location for the `Knofree:dwarf` free key item
+  (the existing one is now labelled **Dwarf Castle [Luca]**)
+
 **Fixes**
 - Fixed the tracker failing to load for any seed using `Pshop` (e.g. the
   Classic Intermediate and Supermarket Sweep presets)
@@ -223,6 +237,20 @@ fork-specific flag combinations load cleanly).
 - Auto-tracking: Gold Hunter, Dark Matter and Key Item Hunt objectives now
   mark complete when turned in (they previously never completed);
   "Obtain 1 key item" is recognized
+- Auto-tracking: character recruit locations now track reliably. They
+  previously didn't track at all on `Cnoearned` seeds, Mysidia/Zot (two
+  characters each) could be missed, and spots emptied by the flag set
+  (`Cnofree`, `Cnoearned`, and now also `Ctreasure:free` / `Ctreasure:earned`)
+  could show up or appear checked
+- Auto-tracking: key item locations no longer reappear or show as checked
+  when the flag set leaves them empty (e.g. Edward/Toroia under `Knofree`,
+  Rydia's Mom under `Knofree:dwarf`)
+- Auto-tracking: locations you check by hand are no longer undone by the
+  tracker; loading an earlier save un-checks only what the game had marked
+- Auto-tracking: the Current Party panel now shows duplicate characters (e.g.
+  two Paloms) and no longer keeps a stale character after saving
+- Clicking Mist Dragon in the Boss Tracker now opens Rydia's Mom under
+  `Knofree` (the click previously only changed the icon)
 
 ## Credits
 

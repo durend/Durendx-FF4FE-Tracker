@@ -64,6 +64,7 @@ const KeyItemCheck = {
     MOON_WHITE: 26,
     HOOK_ROUTE: 27,
     WARP_GLITCH: 28,
+    DWARF_HOSPITAL: 29, // Cid in the Dwarf Castle hospital (Knofree:dwarf free key item)
 };
 const Town = {
     AGART: 0,

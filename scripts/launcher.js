@@ -43,6 +43,8 @@ function launch() {
 		bosstracking = '1';
 	}
 
+	var autobosstracking = document.getElementById('autobossswitch').checked ? '1' : '0';
+
 	if (document.getElementById('autotrackingswitch').checked) {
 		autotracking = '1';
 		autotrackingport = document.getElementById('autotrackingport').value;
@@ -52,7 +54,7 @@ function launch() {
 	var h = 575;
 	var w = 620;
 	
-	open('tracker.html?f=' + flagsval.toUpperCase() + '&d=' + itemtracking + '&c=' + loctracking + '&s=' + bosstracking + '&l=' + locationtracking + '&v=' + verticallayout + '&h=' + currentparty + '&o=' + objectivetracking + '&a=' + autotracking + autotrackingport + '&b=' + browser + '&m=' + encodedObjectives + '&k=' + characterstracking + '&r=' + Date.now(),
+	open('tracker.html?f=' + flagsval.toUpperCase() + '&d=' + itemtracking + '&c=' + loctracking + '&s=' + bosstracking + '&l=' + locationtracking + '&v=' + verticallayout + '&h=' + currentparty + '&o=' + objectivetracking + '&a=' + autotracking + autotrackingport + '&b=' + browser + '&m=' + encodedObjectives + '&k=' + characterstracking + '&ab=' + autobosstracking + '&r=' + Date.now(),
 		'',
 		'width=' + w + ',height=' + h + ',titlebar=0,menubar=0,toolbar=0,scrollbars=0,resizable=0');
 }

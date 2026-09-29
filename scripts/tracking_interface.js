@@ -156,12 +156,20 @@ function tracking_interface() {
              module._lastCharState = currentCharState;
            }
 
+           // Report each character recruit slot only when its bit changes
+           // (reporting every poll made the tracker overwrite flag-driven
+           // states 10 times a second); tracker.html decides what a change
+           // means for the seed's C flags
+           if (!module._charLocBits) module._charLocBits = {};
            for (let i = 0x10; i <= 0x12; i++) {
              for (let b = 0; b < 8; b++) {
                let index = (i * 8 + b) - 0x10*8;
                if (index > 0x14) continue;  // Character slots go up to 0x14
                let truth = !!(memory[i] & (1 << b));
-               set_loc_character(index, truth);
+               if (module._charLocBits[index] !== truth) {
+                 module._charLocBits[index] = truth;
+                 set_loc_character(index, truth);
+               }
              }
            }
            // Read key item location flags (slots 0x20-0x5D = bytes 0x14-0x1B)
@@ -183,14 +191,17 @@ function tracking_interface() {
              module._lastLocState = currentLocState;
            }
 
+           // Report each key item check slot only when its bit changes (same
+           // reasoning as the character slots above)
+           if (!module._kiLocBits) module._kiLocBits = {};
            for (let i = 0x14; i <= 0x1B; i++) {
              for (let b = 0; b < 8; b++) {
-               let index = (i * 8 + b) - 0x14*8;
-               if (index > (0x5D)) continue;
+               let slot = (i * 8 + b) - 0x14*8 + 0x20;
                let truth = !!(memory[i] & (1 << b));
-			   if (keyitemlocations[ki_location_map[index + 0x20]] != 4) {
-               set_loc_ki(index + 0x20, truth);
-			   }
+               if (module._kiLocBits[slot] !== truth) {
+                 module._kiLocBits[slot] = truth;
+                 set_loc_ki(slot, truth);
+               }
              }
            }
            if (module.objectives) {
@@ -231,17 +242,41 @@ function tracking_interface() {
            if (memory.length > 0x7C) {
              let bossCount = memory[0x7C];
              module.set_boss_count(bossCount);
+
+             // Auto boss tracking. The game keeps no record of WHICH bosses were
+             // beaten, only this counter, which goes up once at the end of each
+             // boss fight. When it goes up by exactly one, read the formation of
+             // the battle just fought ($7E1800-1801, still holding the boss's
+             // formation) - boss rando plays the assigned boss's own formation,
+             // so it identifies the boss. The first read (connect / page load)
+             // and bigger jumps (loading a save) only set the baseline.
+             if (module._lastBossCount !== undefined && bossCount === module._lastBossCount + 1) {
+               module.network.snes.send(JSON.stringify({
+                 "Opcode" : "GetAddress",
+                 "Space" : "SNES",
+                 "Operands": ["0xF51800", "2"]
+               })).then(
+                 (event_formation) => event_formation.data.arrayBuffer()
+               ).then(
+                 (buf) => {
+                   let f = new Uint8Array(buf);
+                   module.boss_defeated(f[0] | (f[1] << 8));
+                 }
+               ).catch(() => {});
+             }
+             module._lastBossCount = bossCount;
            }
 
            // Only read party member data every 10 cycles (once per second) to avoid spam
            partyUpdateCounter++;
            if (partyUpdateCounter >= 10) {
              partyUpdateCounter = 0;
-             // Now read party member data ($7E1000-$7E1285 = 0x286 bytes for 5 party slots + plot flags)
+             // Now read party member data ($7E1000-$7E1285 = 5 party slots + plot flags),
+             // extended through the inventory ($7E1440-$7E149F) for the Pass
              module.network.snes.send(JSON.stringify({
                 "Opcode" : "GetAddress",
                 "Space" : "SNES",
-                "Operands": ["0xF51000", "286"]
+                "Operands": ["0xF51000", "4A0"]
              })).then(
                (event_party) => {
                 return event_party.data.arrayBuffer()
@@ -249,6 +284,7 @@ function tracking_interface() {
                 (arrBuf_party) => {
                   let partyMemory = new Uint8Array(arrBuf_party);
                   module.update_party_characters(partyMemory);
+                  update_pass_from_inventory(partyMemory);
               }).catch((err) => {
                 // Silently ignore BUSY errors from USB2SNES
                 if (err !== false && err !== 'BUSY') {
@@ -291,10 +327,34 @@ function tracking_interface() {
     // Character autotracking
     module.update_party_characters = update_party_characters
     module.set_character = (a,b,c) => {} // Will be set by tracker.html
+    module.party_changed = (a) => {} // Will be set by tracker.html - whole visible party, in order
     module.set_hook_route = (a) => {} // Will be set by tracker.html
     module.set_boss_count = (a) => {} // Will be set by tracker.html
+    module.boss_defeated = (a) => {} // Will be set by tracker.html - formation ID of a boss fight just won
     module.apply_checks = () => {} // Will be set to ApplyChecks by tracker.html
     module.notify_character_gained = (a) => {} // Will be set by tracker.html - called when a new character joins
+
+    // The Pass has no bit in the game's key item "found" flags (its tracker
+    // table only lists the other 17 key items), whether it comes from a key
+    // item check (Pkey), a shop, a chest or Kstart:pass. So look for it in the
+    // inventory instead: 48 (item, quantity) pairs at $7E1440 - the same check
+    // the game uses for the Pass door. Reported only when it changes.
+    const PASS_ITEM_CODE = 0xEC;
+    let lastHasPass = null;
+    function update_pass_from_inventory(memory) {
+      if (memory.length < 0x4A0) return;
+      let hasPass = false;
+      for (let i = 0x440; i < 0x4A0; i += 2) {
+        if (memory[i] === PASS_ITEM_CODE && memory[i + 1] > 0) {
+          hasPass = true;
+          break;
+        }
+      }
+      if (hasPass !== lastHasPass) {
+        lastHasPass = hasPass;
+        set_ki(0x11, hasPass);
+      }
+    }
 
     // Track which characters we've ever seen
     let knownCharacters = new Set();
@@ -396,6 +456,13 @@ function tracking_interface() {
             module.set_character(-1, false, false, slot);
           }
         }
+
+        // Hand the tracker the whole party at once (visible game slots first,
+        // then any from hidden slots) so it can handle duplicates and removals
+        let partyIds = charactersInGame.filter(c => c.gameSlot < partyLimit).map(c => c.trackerId)
+          .concat(charactersInGame.filter(c => c.gameSlot >= partyLimit).map(c => c.trackerId))
+          .slice(0, partyLimit);
+        module.party_changed(partyIds);
       }
 
       // Check Hook Route - plot bit at byte 0x283, bit 7

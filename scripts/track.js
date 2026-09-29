@@ -3,7 +3,7 @@ var keyitems = [false,false,false,false,false,false,false,false,false,false,fals
 var usedkeyitems = [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false];
 var bosses = [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false];
 
-var keyitemlocations = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+var keyitemlocations = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 var characterlocations = [0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 var townlocations = [0,0,0,0,0,0,0,0,0,0,0,0,0];
 var trappedchestlocations = [0,0,0,0,0,0,0,0,0,0];
@@ -164,12 +164,19 @@ var modeflags = {
 	ohardreq: [],
 	objectiveSlotNames: {},
 	ctreasure: '',
+	ctreasurefree: false,
+	ctreasureearned: false,
 	kstart: [],
 	ssame: false,
 	ssingles: false,
 	smixed: '',
 	sprice: '',
-	spricey: []
+	spricey: [],
+	// X (experience) flags that feed the XP modifier counter
+	xcrystalbonus: false,
+	xobjbonus: '',
+	xkicheckbonus: '',
+	xzonkbonus: ''
 }
 
 // Pristine copies of the flag-derived state, restored at the start of every
@@ -244,7 +251,7 @@ function SetModes(overrideFlags) {
 	}
 	
 	if (disableloctracker === '1') {
-		keyitemlocations = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1];
+		keyitemlocations = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1];
 		townlocations = [1,1,1,1,1,1,1,1,1,1,1,1,1];
 		characterlocations = [1,1,1,1,1,1,1,1,1,1,1,1,1,1];
 		trappedchestlocations = [1,1,1,1,1,1,1,1,1,1];
@@ -963,8 +970,15 @@ function SetModes(overrideFlags) {
 							modeflags.cpermadeader = true;
 							break;
 						case 'TREASURE':
-							// Ctreasure:free/earned/unsafe/relaxed - characters found in treasure chests instead of the usual locations
-							modeflags.ctreasure = keys[k].split(':')[1] ? keys[k].split(':')[1].toLowerCase() : '';
+							// Ctreasure:free/earned/unsafe/relaxed - characters found in treasure chests instead of the usual locations.
+							// Several can be set at once (e.g. Ctreasure:free/treasure:unsafe), so free/earned get their own flags;
+							// ctreasure keeps the free/earned value for the Seed Notes text.
+							var treasureMode = keys[k].split(':')[1] ? keys[k].split(':')[1].toLowerCase() : '';
+							if (treasureMode === 'free') modeflags.ctreasurefree = true;
+							if (treasureMode === 'earned') modeflags.ctreasureearned = true;
+							if (treasureMode === 'free' || treasureMode === 'earned' || !modeflags.ctreasure) {
+								modeflags.ctreasure = treasureMode;
+							}
 							break;
 						default:
 							if (keys[k].startsWith('DISTINCT')) {
@@ -1288,21 +1302,19 @@ function SetModes(overrideFlags) {
 				}
 			}
 			
-			// Alpha 5.0: X flags (experience/bonus settings)
+			// X flags (experience settings), e.g. Xnokeybonus/kicheckbonus:5/maxlevelbonus
 			if (flagsets[fs].startsWith('X')) {
 				var flagstring = flagsets[fs].substr(1);
 				var keys = flagstring.split('/');
-				// Parse but don't use these values yet - just prevent errors
 				for (var k in keys) {
-					if (keys[k].startsWith('OBJBONUS:')) {
-						modeflags.xobjbonus = keys[k].substring(9);
-					}
-					if (keys[k].startsWith('KICHECKBONUS:')) {
-						modeflags.xkicheckbonus = keys[k].substring(13);
-					}
-					if (keys[k].startsWith('MAXMULTI:')) {
-						modeflags.xmaxmulti = keys[k].substring(9);
-					}
+					var xkey = keys[k];
+					if (xkey === 'SPLIT') modeflags.oexpsplit = true;
+					else if (xkey === 'NOBOOST') modeflags.oexpnoboost = true;
+					else if (xkey === 'NOKEYBONUS') modeflags.oexpnokeybonus = true;
+					else if (xkey === 'CRYSTALBONUS') modeflags.xcrystalbonus = true;
+					else if (xkey.startsWith('OBJECTIVEBONUS:')) modeflags.xobjbonus = xkey.substring(15).toLowerCase();
+					else if (xkey.startsWith('KICHECKBONUS:')) modeflags.xkicheckbonus = xkey.substring(13).toLowerCase();
+					else if (xkey.startsWith('ZONKBONUS:')) modeflags.xzonkbonus = xkey.substring(10);
 				}
 			}
 
@@ -1740,14 +1752,14 @@ function SetFlagOptions() {
 		disableitemtracker = '1';
 	}
 	
-	if (modeflags.cnofree) {
+	if (freeCharacterSpotsEmpty()) {
 		if (characterlocations[CharacterCheck.DAMCYAN] !== 2) characterlocations[CharacterCheck.DAMCYAN] = 3;
 		if (characterlocations[CharacterCheck.MT_ORDEALS] !== 2) characterlocations[CharacterCheck.MT_ORDEALS] = 3;
 		if (characterlocations[CharacterCheck.MYSIDIA] !== 2) characterlocations[CharacterCheck.MYSIDIA] = 3;
 		if (characterlocations[CharacterCheck.WATERWAY] !== 2) characterlocations[CharacterCheck.WATERWAY] = 3;
 	}
 	
-	if (modeflags.cnoearned) {
+	if (earnedCharacterSpotsEmpty()) {
 		characterlocations[CharacterCheck.MIST] = 3;
 		characterlocations[CharacterCheck.KAIPO] = 3;
 		characterlocations[CharacterCheck.MT_HOBS] = 3;
@@ -1785,6 +1797,13 @@ function SetFlagOptions() {
 		}
 		if (keyitemlocations[KeyItemCheck.MIST] !== 2 && keyitemlocations[KeyItemCheck.MIST] !== 4) {
 			keyitemlocations[KeyItemCheck.MIST] = 3;
+		}
+	}
+
+	// Cid in the Dwarf Castle hospital only holds a key item under Knofree:dwarf
+	if (!modeflags.knofreedwarf) {
+		if (keyitemlocations[KeyItemCheck.DWARF_HOSPITAL] !== 2 && keyitemlocations[KeyItemCheck.DWARF_HOSPITAL] !== 4) {
+			keyitemlocations[KeyItemCheck.DWARF_HOSPITAL] = 3;
 		}
 	}
 
@@ -1954,7 +1973,15 @@ function ApplyChecks(){
 		DeactivateKeyItemLocation(KeyItemCheck.DWARF);
 		if (hasunderworldaccess) {
 			ActivateKeyItemLocation(KeyItemCheck.DWARF);
-		}	
+		}
+
+		//Dwarf Castle hospital (Cid) - Knofree:dwarf only; hidden otherwise (set in SetFlagOptions)
+		if (modeflags.knofreedwarf) {
+			DeactivateKeyItemLocation(KeyItemCheck.DWARF_HOSPITAL);
+			if (hasunderworldaccess) {
+				ActivateKeyItemLocation(KeyItemCheck.DWARF_HOSPITAL);
+			}
+		}
 		
 		//Feymarch [Chest]
 		DeactivateKeyItemLocation(KeyItemCheck.FEY_CHEST);
@@ -2042,7 +2069,7 @@ function ApplyChecks(){
 		
 		// ****Characters****
 		//Baron Castle (earned - hidden by Cnoearned)
-		if (modeflags.cnoearned) {
+		if (earnedCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.BARON_CASTLE] !== 2) characterlocations[CharacterCheck.BARON_CASTLE] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.BARON_CASTLE);
@@ -2052,21 +2079,21 @@ function ApplyChecks(){
 		}
 
 		//Town of Baron (earned - hidden by Cnoearned)
-		if (modeflags.cnoearned) {
+		if (earnedCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.BARON_INN] !== 2) characterlocations[CharacterCheck.BARON_INN] = 3;
 		} else {
 			ActivateCharacterLocation(CharacterCheck.BARON_INN);
 		}
 
 		//Damcyan (free - hidden by Cnofree)
-		if (modeflags.cnofree) {
+		if (freeCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.DAMCYAN] !== 2) characterlocations[CharacterCheck.DAMCYAN] = 3;
 		} else {
 			ActivateCharacterLocation(CharacterCheck.DAMCYAN);
 		}
 
 		//Eblan Cave (earned - hidden by Cnoearned)
-		if (modeflags.cnoearned) {
+		if (earnedCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.EBLAN_CAVE] !== 2) characterlocations[CharacterCheck.EBLAN_CAVE] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.EBLAN_CAVE);
@@ -2076,7 +2103,7 @@ function ApplyChecks(){
 		}
 
 		//Giant of Babil (earned - hidden by Cnoearned)
-		if (modeflags.cnoearned) {
+		if (earnedCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.GIANT_BABIL] !== 2) characterlocations[CharacterCheck.GIANT_BABIL] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.GIANT_BABIL);
@@ -2086,7 +2113,7 @@ function ApplyChecks(){
 		}
 
 		//Kaipo (earned - hidden by Cnoearned)
-		if (modeflags.cnoearned) {
+		if (earnedCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.KAIPO] !== 2) characterlocations[CharacterCheck.KAIPO] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.KAIPO);
@@ -2096,7 +2123,7 @@ function ApplyChecks(){
 		}
 
 		//Mist Village (earned - hidden by Cnoearned)
-		if (modeflags.cnoearned) {
+		if (earnedCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.MIST] !== 2) characterlocations[CharacterCheck.MIST] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.MIST);
@@ -2106,28 +2133,28 @@ function ApplyChecks(){
 		}
 
 		//Mt Hobbs (earned - hidden by Cnoearned)
-		if (modeflags.cnoearned) {
+		if (earnedCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.MT_HOBS] !== 2) characterlocations[CharacterCheck.MT_HOBS] = 3;
 		} else {
 			ActivateCharacterLocation(CharacterCheck.MT_HOBS);
 		}
 
 		//Mt Ordeals (free - hidden by Cnofree)
-		if (modeflags.cnofree) {
+		if (freeCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.MT_ORDEALS] !== 2) characterlocations[CharacterCheck.MT_ORDEALS] = 3;
 		} else {
 			ActivateCharacterLocation(CharacterCheck.MT_ORDEALS);
 		}
 
 		//Mysidia (free - hidden by Cnofree)
-		if (modeflags.cnofree) {
+		if (freeCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.MYSIDIA] !== 2) characterlocations[CharacterCheck.MYSIDIA] = 3;
 		} else {
 			ActivateCharacterLocation(CharacterCheck.MYSIDIA);
 		}
 
 		//Tower of Zot (earned - hidden by Cnoearned)
-		if (modeflags.cnoearned) {
+		if (earnedCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.TOWER_ZOT] !== 2) characterlocations[CharacterCheck.TOWER_ZOT] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.TOWER_ZOT);
@@ -2137,14 +2164,14 @@ function ApplyChecks(){
 		}
 
 		//Waterway (free - hidden by Cnofree)
-		if (modeflags.cnofree) {
+		if (freeCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.WATERWAY] !== 2) characterlocations[CharacterCheck.WATERWAY] = 3;
 		} else {
 			ActivateCharacterLocation(CharacterCheck.WATERWAY);
 		}
 
 		//Dwarf Castle (earned - hidden by Cnoearned)
-		if (modeflags.cnoearned) {
+		if (earnedCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.DWARF] !== 2) characterlocations[CharacterCheck.DWARF] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.DWARF);
@@ -2154,7 +2181,7 @@ function ApplyChecks(){
 		}
 
 		//Lunar Sub. (earned - hidden by Cnoearned)
-		if (modeflags.cnoearned) {
+		if (earnedCharacterSpotsEmpty()) {
 			if (characterlocations[CharacterCheck.MOON] !== 2) characterlocations[CharacterCheck.MOON] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.MOON);
@@ -2348,6 +2375,7 @@ function ApplyChecks(){
 	} else {
 		document.getElementById('itemtracker').style.color = "#FFF";
 	}
+	updateXPModifier(itemcount);
 
 	// Helper function to toggle view button display
 	function toggleViewButtons(viewActive, prefix) {
@@ -2366,7 +2394,7 @@ function ApplyChecks(){
 	// DIAGNOSTIC: Track locations before display changes
 	var locationStatesBefore = keyitemlocations.slice();
 
-	for (var i = 0; i < 29; i++) {
+	for (var i = 0; i < keyitemlocations.length; i++) {
 		var l = 'keyitemlocation' + i.toString();
 		var elem = document.getElementById(l);
 		var previousDisplay = elem ? elem.style.display : 'unknown';
@@ -2602,6 +2630,18 @@ function DeactivateKeyItemLocation(locationId) {
 	if (keyitemlocations[locationId] === 1) {
 		keyitemlocations[locationId] = 0;
 	}
+}
+
+// Which normal character recruit spots are empty for this flag set. Cnofree /
+// Cnoearned remove those characters; Ctreasure:free / Ctreasure:earned move
+// them into chests instead (Galeswift character_rando.py), so either way the
+// usual spots have nobody there and should stay hidden.
+function freeCharacterSpotsEmpty() {
+	return !!(modeflags.cnofree || modeflags.ctreasurefree);
+}
+
+function earnedCharacterSpotsEmpty() {
+	return !!(modeflags.cnoearned || modeflags.ctreasureearned);
 }
 
 function ActivateCharacterLocation(locationId) {
@@ -3143,6 +3183,62 @@ function ClearWarpGlitch() {
 	keyitemlocations[KeyItemCheck.WARP_GLITCH] = 2;
 	ignorewarp = true;
 	ApplyChecks();
+}
+
+// XP modifier shown on the left of the KEY ITEMS header, based only on key
+// items gained and the seed's X flags (Galeswift experience_acceleration.f4c):
+//   - 10+ key items: x2 (unless Xnokeybonus)
+//   - Xcrystalbonus: x2 more once the Crystal is obtained
+//   - Xkicheckbonus:N: +N% per key item gained after the starting item
+//   - Xobjectivebonus:N: +N% per completed objective (:num = 100% split across
+//     all of the seed's objectives)
+var objectivesCompletedCount = 0;
+var objectivesTotalCount = 0;
+
+function updateXPModifier(itemcount) {
+	var el = document.getElementById('xpmodifier');
+	if (!el) return;
+
+	if (itemcount === undefined) {
+		itemcount = 0;
+		for (var i = 0; i < keyitems.length; i++) {
+			if (keyitems[i] === true && i != KeyItem.PASS) itemcount++;
+		}
+	}
+
+	var multiplier = 1;
+	var parts = [];
+
+	if (!modeflags.oexpnokeybonus) {
+		if (itemcount >= 10) multiplier *= 2;
+		parts.push('x2 at 10 key items (' + itemcount + '/10)');
+	}
+
+	if (modeflags.xcrystalbonus) {
+		if (keyitems[KeyItem.CRYSTAL] === true) multiplier *= 2;
+		parts.push('x2 once the Crystal is obtained');
+	}
+
+	var kiBonus = parseInt(modeflags.xkicheckbonus);
+	if (kiBonus > 0) {
+		var gained = itemcount + ((modeflags.pkey && keyitems[KeyItem.PASS] === true) ? 1 : 0);
+		multiplier *= 1 + Math.max(0, gained - 1) * kiBonus / 100;
+		parts.push('+' + kiBonus + '% per key item after the starting one');
+	}
+
+	if (modeflags.xobjbonus) {
+		var objBonus = modeflags.xobjbonus === 'num'
+			? (objectivesTotalCount > 0 ? 100 / objectivesTotalCount : 0)
+			: parseInt(modeflags.xobjbonus);
+		if (objBonus > 0) {
+			multiplier *= 1 + objectivesCompletedCount * objBonus / 100;
+			parts.push('+' + objBonus.toFixed(1).replace(/\.0$/, '') + '% per completed objective (' + objectivesCompletedCount + '/' + objectivesTotalCount + ')');
+		}
+	}
+
+	el.textContent = 'XP:' + multiplier.toFixed(2).replace(/\.?0+$/, '') + 'x';
+	el.style.color = multiplier > 1 ? '#0F0' : '#FFF';
+	el.title = parts.length ? parts.join(' | ') : 'No key item XP bonus in this seed';
 }
 
 function DMTicker(delta) {

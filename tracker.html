@@ -3,8 +3,8 @@
 		<head>
 			<title>FFIV Free Enterprise Tracker v1.03 - By Durendx</title>
 			<link rel="stylesheet" href="./styles/stylesheet.css?v=2316">
-			<link rel="stylesheet" href="./styles/tracker_v2.css">
-			<script src="./scripts/enums.js?v=2316"></script>
+			<link rel="stylesheet" href="./styles/tracker_v2.css?v=2404">
+			<script src="./scripts/enums.js?v=2405"></script>
 			<script src="./scripts/items.js?v=2316"></script>
 			<script type="text/javascript">
 			// Initialize tracker disable flags BEFORE track.js loads
@@ -16,7 +16,7 @@
 			var disableobjectivetracker = '0';
 			var disablecharacterstracker = '0';  // Character locations tracker
 			</script>
-			<script src="./scripts/track.js?v=2403"></script>
+			<script src="./scripts/track.js?v=2405"></script>
 			<script type="text/javascript" src="./scripts/jquery-3.3.1.js"></script>
 			<script type="text/javascript" src="./scripts/jquery.powertip.js"></script>
 			<link rel="stylesheet" type="text/css" href="./styles/jquery.powertip.css" />
@@ -24,7 +24,7 @@
 			<script src="./scripts/network.js"></script>
 			<script src="./scripts/rom-metadata.js?v=2403"></script>
 			<script src="./scripts/objectives.js?v=2403"></script>
-			<script src="./scripts/tracking_interface.js?v=2403"></script>
+			<script src="./scripts/tracking_interface.js?v=2405"></script>
 
 			<script type="text/javascript">
 			let ti = new tracking_interface();
@@ -78,7 +78,8 @@
 				0x003B: KeyItemCheck.MOON_MASAMUNE,
 				0x0039: KeyItemCheck.MOON_RIBBON,
 				0x003A: KeyItemCheck.MOON_RIBBON,
-				0x0038: KeyItemCheck.MOON_WHITE
+				0x0038: KeyItemCheck.MOON_WHITE,
+				0x005F: KeyItemCheck.DWARF_HOSPITAL
 			}
 
 			let character_location_map = {
@@ -158,39 +159,78 @@
 			  usedkeyitems[ki_map[slot]] = value;
 			}
 
+			// Key item check locations from the ROM's reward-slot "checked" bits
+			// ($7E1514-151B). Same rules as character spots: locations the flags
+			// hide (state 3, e.g. Toroia under Knofree) stay hidden even though the
+			// game still marks them visited; the Lunar Ribbon boss has two slots;
+			// only ROM-made checks are undone (loading an earlier save).
+			let kiSlotChecked = {};
+			let kiLocationCheckedByRom = {};
+
 			ti.auto_set_loc_ki = (slot, value) => {
-			  if (ki_location_map[slot] !== undefined) {
-					var locationId = ki_location_map[slot];
-					// Always follow ROM - no protection
-					keyitemlocations[locationId] = value ? 2 : 0;
-					if (applyChecksTimer) clearTimeout(applyChecksTimer);
-					applyChecksTimer = setTimeout(() => {
-						ApplyChecks();
-						if (typeof applyV2LocationStyling === 'function') {
-							applyV2LocationStyling();
-						}
-					}, 50);
+				var locationId = ki_location_map[slot];
+				if (locationId === undefined) return;
+				kiSlotChecked[slot] = value;
+
+				var visited = Object.keys(ki_location_map).some(
+					s => ki_location_map[s] === locationId && kiSlotChecked[s]);
+				var state = keyitemlocations[locationId];
+
+				if (visited) {
+					if (state === 2 || state === 3 || state === 4) return;
+					keyitemlocations[locationId] = 2;
+					kiLocationCheckedByRom[locationId] = true;
+				} else {
+					if (!kiLocationCheckedByRom[locationId] || state !== 2) return;
+					kiLocationCheckedByRom[locationId] = false;
+					keyitemlocations[locationId] = 0; // ApplyChecks re-derives availability
 				}
+
+				if (applyChecksTimer) clearTimeout(applyChecksTimer);
+				applyChecksTimer = setTimeout(() => {
+					ApplyChecks();
+					if (typeof applyV2LocationStyling === 'function') {
+						applyV2LocationStyling();
+					}
+				}, 50);
 			}
 
-			ti.auto_set_loc_character = (slot, value) => {
-			  // Ignore character locations if Cnoearned flag is set
-			  if (typeof modeflags !== 'undefined' && modeflags.cnoearned) {
-			    return; // Don't track earned character locations
-			  }
+			// Character recruit spots from the ROM's reward-slot "checked" bits
+			// ($7E1510-1512). The game sets a spot's bit when you visit it, even
+			// if the flag set left it empty, so:
+			//  - spots the flags hide (state 3: Cnofree/Cnoearned/Ctreasure) stay hidden
+			//  - Mysidia and Zot have two slots each; the spot counts as visited if either is set
+			//  - a spot is only un-checked if the ROM checked it (e.g. loading an earlier
+			//    save), so spots clicked by hand are left alone
+			let characterSlotChecked = {};
+			let characterLocationCheckedByRom = {};
 
-			  if (character_location_map[slot] !== undefined) {
-					var locationId = character_location_map[slot];
-					// Always follow ROM - no protection
-					characterlocations[locationId] = value ? 2 : 0;
-					if (applyChecksTimer) clearTimeout(applyChecksTimer);
-					applyChecksTimer = setTimeout(() => {
-						ApplyChecks();
-						if (typeof applyV2LocationStyling === 'function') {
-							applyV2LocationStyling();
-						}
-					}, 50);
+			ti.auto_set_loc_character = (slot, value) => {
+				var locationId = character_location_map[slot];
+				if (locationId === undefined) return;
+				characterSlotChecked[slot] = value;
+
+				var visited = Object.keys(character_location_map).some(
+					s => character_location_map[s] === locationId && characterSlotChecked[s]);
+				var state = characterlocations[locationId];
+
+				if (visited) {
+					if (state === 2 || state === 3 || state === 4) return;
+					characterlocations[locationId] = 2;
+					characterLocationCheckedByRom[locationId] = true;
+				} else {
+					if (!characterLocationCheckedByRom[locationId] || state !== 2) return;
+					characterLocationCheckedByRom[locationId] = false;
+					characterlocations[locationId] = 0; // ApplyChecks re-derives availability
 				}
+
+				if (applyChecksTimer) clearTimeout(applyChecksTimer);
+				applyChecksTimer = setTimeout(() => {
+					ApplyChecks();
+					if (typeof applyV2LocationStyling === 'function') {
+						applyV2LocationStyling();
+					}
+				}, 50);
 			}
 
 			ti.set_boss_count = (count) => {
@@ -278,111 +318,60 @@
 				}
 			}
 
+			// Per-character updates from the ROM: marks the character as acquired and
+			// records Cecil/Rydia's form. Which tracker slot shows whom is decided by
+			// ti.party_changed below, from the whole party at once.
 			ti.set_character = (charId, hasCharacter, isAltForm, partySlot) => {
-			  console.log(`🔧 set_character: charId=${charId}, hasChar=${hasCharacter}, altForm=${isAltForm}, slot=${partySlot}`);
-			  if (typeof characters !== 'undefined') {
-					// Mark character as acquired
-					if (charId >= 0) {
-						characters[charId] = hasCharacter;
-						if (hasCharacter) {
-							document.getElementById('character' + charId + '_x').style.visibility = 'visible';
-						}
+				if (typeof characters === 'undefined') return;
+				if (partySlot !== undefined && partySlot >= 0 && partySlot < 5) {
+					partymembers[partySlot] = charId;
+				}
+				if (charId < 0 || !hasCharacter) return;
+
+				characters[charId] = true;
+				let marker = document.getElementById('character' + charId + '_x');
+				if (marker) marker.style.visibility = 'visible';
+
+				if (charId === 0) {
+					cecil = isAltForm;
+				} else if (charId === 2) {
+					rydia = isAltForm;
+				}
+			}
+
+			// The ROM's current party (tracker character IDs, in party order, already
+			// capped to the seed's party size). Reconcile it against the tracker slots,
+			// counting duplicates (e.g. two Paloms): characters still in the party keep
+			// their slot (and any form clicked for them), anyone gone is cleared, and
+			// new arrivals fill the empty slots.
+			ti.party_changed = (partyIds) => {
+				let limit = (typeof modeflags !== 'undefined' && modeflags.climit) ? parseInt(modeflags.climit) : 5;
+				let remaining = partyIds.slice(0, limit);
+				let keep = [false, false, false, false, false];
+
+				for (let i = 0; i < 5; i++) {
+					let id = window.trackerPartySlots[i];
+					let at = id === -1 ? -1 : remaining.indexOf(id);
+					if (i < limit && at !== -1) {
+						remaining.splice(at, 1);
+						keep[i] = true;
 					}
-
-					// Still update partymembers for compatibility
-					if (partySlot !== undefined && partySlot >= 0 && partySlot < 5) {
-						partymembers[partySlot] = charId;
+				}
+				for (let i = 0; i < 5; i++) {
+					if (!keep[i]) {
+						window.trackerPartySlots[i] = -1;
+						window.trackerPartyForms[i] = false;
 					}
-
-					// Handle empty slot signal (charId === -1) - triggered when party composition changes
-					if (charId === -1 && !hasCharacter && partySlot !== undefined && partySlot >= 0 && partySlot < 5) {
-						console.log(`🧹 Empty slot signal for game slot ${partySlot} - scheduling cleanup`);
-						// This game slot is now empty - clear any tracker slot that matches it
-						// Defer cleanup slightly to allow all character updates to complete first
-						if (window.partyCleanupTimer) clearTimeout(window.partyCleanupTimer);
-						window.partyCleanupTimer = setTimeout(() => {
-							// Build set of current party character IDs
-							let currentPartySet = new Set();
-							for (let i = 0; i < 5; i++) {
-								if (partymembers[i] !== -1) {
-									currentPartySet.add(partymembers[i]);
-								}
-							}
-							// Clear tracker slots for characters no longer in party
-							for (let i = 0; i < 5; i++) {
-								if (window.trackerPartySlots[i] !== -1 && !currentPartySet.has(window.trackerPartySlots[i])) {
-									console.log(`Clearing tracker slot ${i} (char ${window.trackerPartySlots[i]}) - not in current party`);
-									window.trackerPartySlots[i] = -1;
-									window.trackerPartyForms[i] = false;
-									updateTrackerPartyDisplay(i);
-								}
-							}
-						}, 100); // Wait 100ms for all party updates to complete
-						return; // Don't process further for empty slots
-					}
-
-					// PERSISTENT SLOT ASSIGNMENT LOGIC
-					if (charId >= 0 && hasCharacter) {
-						// Character is joining party
-						let existingSlot = findTrackerSlotForCharacter(charId);
-
-						if (existingSlot !== -1) {
-							// Character already in tracker - DON'T update form (protection)
-							// Form is set when character first joins and doesn't change from ROM
-							// (User can manually click to change Cecil/Rydia forms)
-						} else if (isCharacterAllowed(charId)) {
-							// New character - find slot
-							let availableSlot = findAvailableTrackerSlot();
-
-							if (availableSlot !== -1) {
-								// Empty slot available - assign
-								window.trackerPartySlots[availableSlot] = charId;
-								// For Cecil and Rydia, default to base form (don't use ROM)
-								window.trackerPartyForms[availableSlot] = false;
-								updateTrackerPartyDisplay(availableSlot);
-							} else {
-								// Party full - find who left and replace them
-								// Build current party from game memory (partymembers)
-								let currentParty = new Set();
-								for (let i = 0; i < 5; i++) {
-									if (partymembers[i] !== -1) {
-										currentParty.add(partymembers[i]);
-									}
-								}
-
-								// Find which tracker character is no longer in party
-								let limit = (typeof modeflags !== 'undefined' && modeflags.climit) ? modeflags.climit : 5;
-								for (let i = 0; i < limit; i++) {
-									if (window.trackerPartySlots[i] !== -1 && !currentParty.has(window.trackerPartySlots[i])) {
-										// This character left - replace with new one
-										window.trackerPartySlots[i] = charId;
-										// For Cecil and Rydia, default to base form (don't use ROM)
-										window.trackerPartyForms[i] = false;
-										updateTrackerPartyDisplay(i);
-										break;
-									}
-								}
-							}
-						}
-
-						// Handle Cecil/Rydia forms
-						if (charId === 0) {
-							cecil = isAltForm;
-						} else if (charId === 2) {
-							rydia = isAltForm;
-							// Auto-complete Dwarf Castle if Adult Rydia appears
-							if (isAltForm && typeof characterlocations !== 'undefined' && typeof CharacterCheck !== 'undefined') {
-								if (characterlocations[CharacterCheck.DWARF] === 1) {
-									characterlocations[CharacterCheck.DWARF] = 2;
-									ApplyChecks();
-									if (typeof applyV2LocationStyling === 'function') {
-										applyV2LocationStyling();
-									}
-								}
-							}
-						}
-					}
-			  }
+				}
+				for (let id of remaining) {
+					let slot = findAvailableTrackerSlot();
+					if (slot === -1) break;
+					window.trackerPartySlots[slot] = id;
+					window.trackerPartyForms[slot] = false; // base form; click to change Cecil/Rydia
+				}
+				for (let i = 0; i < 5; i++) {
+					updateTrackerPartyDisplay(i);
+				}
 			}
 
 			ti.set_hook_route = (cleared) => {
@@ -962,6 +951,11 @@
 
 				objectiveCounter.textContent = `${completedCount}/${totalCount}`;
 
+				// Xobjectivebonus: completed objectives raise the XP modifier
+				objectivesCompletedCount = completedCount;
+				objectivesTotalCount = totalCount;
+				if (typeof updateXPModifier === 'function') updateXPModifier();
+
 				updateSeedNotes();
 			}
 
@@ -1025,7 +1019,7 @@
 
 				<!-- KEY ITEMS -->
 				<div class="section">
-					<div class="section-header">KEY ITEMS <span id="itemtracker" class="header-counter">0/17</span></div>
+					<div class="section-header"><span id="xpmodifier" class="header-counter header-counter-left">XP:1x</span>KEY ITEMS <span id="itemtracker" class="header-counter">0/17</span></div>
 					<div class="items-grid">
 						<div id="item0" class="item-slot" onclick="SwapItem(0)"></div>
 						<div id="item1" class="item-slot" onclick="SwapItem(1)"></div>
@@ -1325,25 +1319,90 @@
 			});
 		}
 
+		// Mark a boss defeated / not defeated: swaps the icon and keeps bosses[] and
+		// the Mist Dragon flag (which opens Rydia's Mom under Knofree) in sync
+		function setBossDefeated(bossId, defeated) {
+			const bossElement = document.getElementById('bossmodal' + bossId);
+			if (!bossElement) return;
+			const bossName = bossElement.getAttribute('data-boss');
+			if (!bossName) return;
+
+			bossElement.classList.toggle('defeated', defeated);
+			bossElement.style.backgroundImage = `url('boss/${bossName}-${defeated ? 'Color' : 'Gray'}.png')`;
+
+			if (typeof bosses !== 'undefined') bosses[bossId] = defeated;
+			if (bossId === 0 && typeof mist !== 'undefined' && mist !== defeated) {
+				mist = defeated;
+				if (typeof ApplyChecks === 'function') ApplyChecks();
+			}
+		}
+
 		// Handle boss click to toggle defeated status
 		function SwapBoss(bossId) {
 			const bossElement = document.getElementById('bossmodal' + bossId);
 			if (!bossElement) return;
-
-			const bossName = bossElement.getAttribute('data-boss');
-			if (!bossName) return;
-
-			// Toggle between gray and color images
-			if (bossElement.classList.contains('defeated')) {
-				// Boss is defeated (color), mark as alive (gray)
-				bossElement.classList.remove('defeated');
-				bossElement.style.backgroundImage = `url('boss/${bossName}-Gray.png')`;
-			} else {
-				// Boss is alive (gray), mark as defeated (color)
-				bossElement.classList.add('defeated');
-				bossElement.style.backgroundImage = `url('boss/${bossName}-Color.png')`;
-			}
+			setBossDefeated(bossId, !bossElement.classList.contains('defeated'));
 		}
+
+		// Auto boss tracking: battle formation ID -> boss tracker icon index.
+		// Formation IDs from Galeswift boss_rando.py FORMATION_MAP (each boss keeps
+		// its own formation wherever boss rando places it).
+		const BOSS_FORMATIONS = {
+			0x0DE: 0,                                  // Mist Dragon
+			0x0ED: 1,                                  // Baron Soldiers (officer)
+			0x0DF: 2,                                  // Octomamm
+			0x0E0: 3,                                  // Antlion
+			0x0EF: 4,                                  // Waterhag
+			0x0E1: 5,                                  // Mom Bomb
+			0x0F7: 6, 0x0F8: 6, 0x0F9: 6, 0x0DA: 6,    // Fabul Gauntlet
+			0x0E2: 7,                                  // Milon
+			0x0E3: 8,                                  // Milon Z
+			0x0F6: 9,                                  // Dark Knight Cecil
+			0x0FA: 10,                                 // Baron Guards
+			0x0F2: 11,                                 // Yang (karate)
+			0x0E4: 12,                                 // Baigan
+			0x0E5: 13,                                 // Kainazzo
+			0x0E7: 14,                                 // Dark Elf
+			0x0E8: 15,                                 // Magus Sisters
+			0x0EA: 16,                                 // Valvalis
+			0x1A7: 17,                                 // Calcabrina
+			0x1B6: 18,                                 // Golbez
+			0x1A9: 19, 0x1B5: 19,                      // Dr Lugae
+			0x100: 20,                                 // Dark Imps
+			0x0FE: 21,                                 // K & Q Eblan
+			0x0FF: 22,                                 // Rubicant
+			0x1AF: 23,                                 // Evil Wall
+			0x0DC: 24,                                 // Elementals
+			0x0DD: 25,                                 // CPU
+			0x1AC: 26,                                 // Odin
+			0x1B0: 27,                                 // Asura
+			0x1AD: 28,                                 // Leviathan
+			0x1AE: 29,                                 // Bahamut
+			0x1FB: 30,                                 // Pale Dim
+			0x1FD: 31,                                 // Lunar Dragons
+			0x1FE: 32,                                 // Plague
+			0x1FA: 33,                                 // Ogopogo
+			0x1FC: 34                                  // Wyvern
+		};
+
+		// Launcher toggle "Auto-Track Bosses" (URL param ab); on unless ab=0
+		const autoBossTracking = getParameterByName('ab') !== '0';
+
+		ti.boss_defeated = (formation) => {
+			if (!autoBossTracking) return;
+			let bossId = BOSS_FORMATIONS[formation];
+			// Balt:gauntlet replaces the Fabul Gauntlet boss with ordinary monster
+			// formations, so an unrecognised formation after a boss win is that one
+			if (bossId === undefined && typeof modeflags !== 'undefined' && modeflags.baltgauntlet) {
+				bossId = 6;
+			}
+			if (bossId === undefined) {
+				console.warn('Auto boss tracking: unknown boss formation 0x' + formation.toString(16));
+				return;
+			}
+			console.log('Auto boss tracking: formation 0x' + formation.toString(16) + ' -> boss ' + bossId);
+			setBossDefeated(bossId, true);
+		};
 
 		// Character selector variables
 		let currentPartySlot = null;
@@ -1459,7 +1518,7 @@
 			// Handle key item locations
 			// NOTE: Do NOT touch display property - that's managed by ApplyChecks()
 			// This function only adds/removes the 'cleared' class for styling
-			for (let i = 0; i < 29; i++) {
+			for (let i = 0; i < keyitemlocations.length; i++) {
 				const locationElement = document.getElementById('keyitemlocation' + i);
 				if (locationElement && (keyitemlocations[i] === 2 || keyitemlocations[i] === 4)) {
 					// Add cleared styling (ApplyChecks handles display)
@@ -1505,7 +1564,8 @@
 				['Town of Baron', 4, 'world-overworld'],
 
 				// UNDERWORLD (alphabetical)
-				['Dwarf Castle', 13, 'world-underworld'],
+				['Dwarf Castle [Luca]', 13, 'world-underworld'],
+				['Dwarf Castle [Cid]', 29, 'world-underworld'],
 				['Fabul [Sheila/Pan]', 7, 'world-underworld'],
 				['Fabul [Sheila/Sylph]', 6, 'world-underworld'],
 				['Feymarch [Asura]', 15, 'world-underworld'],
