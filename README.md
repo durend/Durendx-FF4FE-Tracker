@@ -24,11 +24,14 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
 - Boss Collector objectives
 - Gold Hunter objectives
 - Objective Groups (Alpha groups A-E) with progressive rewards
+- Dark Matter hunt, Key Item hunt and External objectives
+- Seed Notes for Ctreasure, Kstart, gated/hard-required objectives and shop flags
+- Tested against Galeswift v4.7.0
 
 ## Quick Start
 
 ### Manual Tracking
-1. Download the [latest release](https://github.com/durend/Durendx-s-FF4FE-Tracker/releases)
+1. Download the [latest release](https://github.com/durend/Durendx-FF4FE-Tracker/releases)
 2. Extract the files
 3. Open `launcher.html` in your web browser
 4. Enter your flag string
@@ -190,6 +193,37 @@ Comprehensive support for FF4FE flags including:
 
 - Added boss name tooltips - hover over any boss icon to see its full name
 
+## Changes (v1.03)
+
+Updated and tested for **Galeswift v4.7.0** (all 61 official presets plus
+fork-specific flag combinations load cleanly).
+
+**New Galeswift flag support**
+- `Omode:dkmatterN` (Dark Matter hunt counter), `Omode:kiN` (Key Item hunt,
+  counted automatically from the Key Items panel), `Omode:external`
+- New **Seed Notes** panel for `Ctreasure`, `Kstart`, `Ogated`, `Ohardreq`
+  and shop flags (`Sprice`, `Spricey`, `Smixed`, `Ssame`, `Ssingles`)
+- Multiple random objective pools (`Orandom2:`, `Orandom3:`) and `tough_quest`
+
+**Fixes**
+- Fixed the tracker failing to load for any seed using `Pshop` (e.g. the
+  Classic Intermediate and Supermarket Sweep presets)
+- Fixed fixed objectives (`O1:quest_forge`, `Omode:fiends`, classic modes,
+  specific boss/character objectives) not appearing in the Objectives panel;
+  random objectives now show as placeholders
+- Fixed `Omode:` seeds ignoring `win:game` / `req:` settings
+- Fixed the Boss Collector / Gold Hunter / Dark Matter +/- buttons throwing
+  errors
+- Fixed objective slots 10 and above losing their names
+- Gold Hunter now shows the correct amount (`goldhunter100` = 100,000 GP),
+  counted in 1k steps
+- Auto-tracking: ROM seed metadata is now read in full (it was cut off at
+  1 KB, which broke objective reading on seeds with long flag strings or
+  many objectives)
+- Auto-tracking: Gold Hunter, Dark Matter and Key Item Hunt objectives now
+  mark complete when turned in (they previously never completed);
+  "Obtain 1 key item" is recognized
+
 ## Credits
 
 - **Original Tracker**: Created by [Dunka](https://github.com/Dunkalunk)
@@ -204,7 +238,7 @@ This project is open source and available for community use.
 ## Support
 
 For issues, questions, or feature requests:
-- Open an issue on [GitHub](https://github.com/durend/Durendx-s-FF4FE-Tracker/issues)
+- Open an issue on [GitHub](https://github.com/durend/Durendx-FF4FE-Tracker/issues)
 - Join the FF4 Free Enterprise community
 
 ## Links
@@ -215,5 +249,5 @@ For issues, questions, or feature requests:
 
 ---
 
-**Version**: 1.02
-**Last Updated**: January 2026
+**Version**: 1.03
+**Last Updated**: September 2026

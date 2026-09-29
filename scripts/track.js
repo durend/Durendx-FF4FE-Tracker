@@ -172,6 +172,13 @@ var modeflags = {
 	spricey: []
 }
 
+// Pristine copies of the flag-derived state, restored at the start of every
+// SetModes() call so it is safe to call more than once (a second run would
+// otherwise inherit stale defaults and duplicate array entries).
+var initialModeflags = JSON.stringify(modeflags);
+var initialObjectiveGroups = JSON.stringify(objectiveGroups);
+var initialObjectives = objectives.slice();
+
 //NEW FLAGS
 var overridestarting = '';
 
@@ -188,7 +195,7 @@ var autotrackingerror = false;
 var partyswap = 0;
 var ignoreswap = false;
 
-var flags = getParameterByName('f');
+var flags = getParameterByName('f') || '';
 
 var flagsets = flags.split('|');
 var excludedCharacters = '';
@@ -206,7 +213,7 @@ function getParameterByName(name, url) {
 	return decodeURIComponent(results[2].replace(/\+/g, " "));
 }				
 
-function SetModes() {
+function SetModes(overrideFlags) {
 	$('#itemModal').hide();
 	//$('#flagsModal').hide();
 	$('#bossModal').hide();
@@ -274,8 +281,18 @@ function SetModes() {
 		if (objectivediv) objectivediv.style.display = "none";
 	}
 	
-	flags = getParameterByName('f');
-	
+	// Normally read from the launcher's URL param; a flag string can also be
+	// passed in directly (e.g. the one embedded in the ROM metadata).
+	flags = (overrideFlags !== undefined) ? overrideFlags : getParameterByName('f');
+	// The launcher joins flags with '|', but FE's own flag strings are
+	// space-separated - normalize both to '|'.
+	flags = (flags || '').trim().toUpperCase().replace(/\s+/g, '|');
+
+	modeflags = JSON.parse(initialModeflags);
+	objectiveGroups = JSON.parse(initialObjectiveGroups);
+	objectives = initialObjectives.slice();
+	isMystery = false;
+
 	flagsets = flags.split('|');
 	excludedCharacters = '';
 	includedCharacters = '';
@@ -319,7 +336,7 @@ function SetModes() {
 									console.log('Adding objective to group', groupLetter, ':', objMatch[2]);
 									objectiveGroups[groupLetter].objectives.push({
 										id: objMatch[1],
-										name: objMatch[2],
+										name: objMatch[2].toLowerCase(),
 										completed: false
 									});
 									objectiveGroups[groupLetter].total++;
@@ -352,7 +369,10 @@ function SetModes() {
 					// First part is the mode type (e.g., BOSSCOLLECTOR20)
 					var modeType = modeParts[0];
 
-					// Remaining parts are numbered objectives (e.g., 1:BOSS_GOLBEZ)
+					// Remaining parts are numbered objectives (e.g., 1:BOSS_GOLBEZ) or
+					// ordinary O-flag settings (REQ:ALL, WIN:GAME, GATED:1...) that must
+					// still reach the generic parser below
+					var otherModeParts = [];
 					for (var mp = 1; mp < modeParts.length; mp++) {
 						var part = modeParts[mp];
 						console.log('Checking MODE part', mp, ':', part);
@@ -372,12 +392,15 @@ function SetModes() {
 								});
 								objectiveGroups.O.total++;
 							}
+						} else {
+							otherModeParts.push(part);
 						}
 					}
 
-					// Don't continue - still need to process the mode type below
-					// Replace flagstring with MODE: prefix + mode type so it gets processed correctly
-					flagstring = 'MODE:' + modeType;
+					// Don't continue - still need to process the mode type below.
+					// Rebuild as MODE:<type> plus the non-objective parts, so e.g.
+					// Omode:goldhunter100/req:all/win:game keeps its win condition.
+					flagstring = ['MODE:' + modeType].concat(otherModeParts).join('/');
 				}
 
 				var keys = flagstring.split('/');
@@ -481,6 +504,7 @@ function SetModes() {
 								for (var l in randomquests) {
 									switch (randomquests[l]) {
 										case 'QUEST':
+										case 'TOUGH_QUEST':
 										case 'GATED_QUEST':
 											modeflags.oquests = true;
 											break;
@@ -491,13 +515,16 @@ function SetModes() {
 											modeflags.ochar = true;
 											break;
 										default:
-											if (randomquests[l].startsWith('RANDOM')) {
-												modeflags.orandomcount = randomquests[l].substring(7);
+											// RANDOM:5, RANDOM2:3, RANDOM3:3 - each pool adds to the total
+											var poolMatch = randomquests[l].match(/^RANDOM(\d*):(\d+)$/);
+											if (poolMatch) {
+												var isFirstPool = poolMatch[1] === '';
+												modeflags.orandomcount = (parseInt(modeflags.orandomcount) || 0) + parseInt(poolMatch[2]);
 												//If we are ignoring modes because of autotracking, need to add them back in here
-												if (modeflags.oforge === true && enableautotracking === '1') {
+												if (isFirstPool && modeflags.oforge === true && enableautotracking === '1') {
 													modeflags.orandomcount++;
 												}
-												if (modeflags.ogiant === true && enableautotracking === '1') {
+												if (isFirstPool && modeflags.ogiant === true && enableautotracking === '1') {
 													modeflags.orandomcount++;
 												}
 												
@@ -531,7 +558,7 @@ function SetModes() {
 								var hardreqSlot = parseInt(keys[k].substring(8));
 								if (!isNaN(hardreqSlot)) modeflags.ohardreq.push(hardreqSlot);
 							} else {
-								var currentkey = keys[k].substr(2).toLowerCase();
+								var currentkey = keys[k].replace(/^\d+:/, '').toLowerCase();
 								// Track which named objective occupies each slot number, so Ogated/Ohardreq (which reference slots) can be resolved to a name for display
 								var slotMatch = keys[k].match(/^(\d+):/);
 								if (slotMatch) {
@@ -869,7 +896,9 @@ function SetModes() {
 					switch (keys[k]) {
 						case 'SHOP':
 							modeflags.pshop = true;
-							document.getElementById("passtd").style.display = "block";
+							// #passtd only exists in the pre-V2 layout; unguarded, this crashed SetModes for every Pshop seed
+							var passtd = document.getElementById("passtd");
+							if (passtd) passtd.style.display = "block";
 							break;
 						case 'KEY':
 							modeflags.pkey = true;
@@ -3120,21 +3149,24 @@ function DMTicker(delta) {
 	dmcount += delta;
 	if (dmcount < 0) { dmcount = 0 };
 	if (dmcount > 45) { dmcount = 45 };
-	document.getElementById('dmcountspan').innerHTML = dmcount;
+	var dmcountspan = document.getElementById('dmcountspan');
+	if (dmcountspan) dmcountspan.innerHTML = dmcount;
 }
 
 function BossTicker(delta) {
 	bosscount += delta;
 	if (bosscount < 0) { bosscount = 0 };
 	if (bosscount > 99) { bosscount = 99 };
-	document.getElementById('bosscountspan').innerHTML = bosscount;
+	var bosscountspan = document.getElementById('bosscountspan');
+	if (bosscountspan) bosscountspan.innerHTML = bosscount;
 }
 
 function GoldTicker(delta) {
 	goldcount += delta;
 	if (goldcount < 0) { goldcount = 0 };
 	if (goldcount > 9999999) { goldcount = 9999999 };
-	document.getElementById('goldcountspan').innerHTML = goldcount;
+	var goldcountspan = document.getElementById('goldcountspan');
+	if (goldcountspan) goldcountspan.innerHTML = goldcount;
 }
 
 function HighlightClear(partySlot) {

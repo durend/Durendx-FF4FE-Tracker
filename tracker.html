@@ -1,7 +1,7 @@
 <html>
 	<body bgcolor="#000063">
 		<head>
-			<title>FFIV Free Enterprise Tracker v1.02 - By Durendx</title>
+			<title>FFIV Free Enterprise Tracker v1.03 - By Durendx</title>
 			<link rel="stylesheet" href="./styles/stylesheet.css?v=2316">
 			<link rel="stylesheet" href="./styles/tracker_v2.css">
 			<script src="./scripts/enums.js?v=2316"></script>
@@ -16,13 +16,15 @@
 			var disableobjectivetracker = '0';
 			var disablecharacterstracker = '0';  // Character locations tracker
 			</script>
-			<script src="./scripts/track.js?v=2340"></script>
+			<script src="./scripts/track.js?v=2403"></script>
 			<script type="text/javascript" src="./scripts/jquery-3.3.1.js"></script>
 			<script type="text/javascript" src="./scripts/jquery.powertip.js"></script>
 			<link rel="stylesheet" type="text/css" href="./styles/jquery.powertip.css" />
 			<script src="./scripts/usb2snes.js"></script>
 			<script src="./scripts/network.js"></script>
-			<script src="./scripts/tracking_interface.js"></script>
+			<script src="./scripts/rom-metadata.js?v=2403"></script>
+			<script src="./scripts/objectives.js?v=2403"></script>
+			<script src="./scripts/tracking_interface.js?v=2403"></script>
 
 			<script type="text/javascript">
 			let ti = new tracking_interface();
@@ -416,9 +418,6 @@
 				updateObjectivesList();
 			}
 
-			// Store ki objective targets for dynamic checking
-			let kiObjectiveTargets = {};
-
 			ti.auto_set_objective = (slot, value) => {
 				let index = objectivenames.indexOf(slot);
 
@@ -433,14 +432,6 @@
 							break;
 						}
 					}
-				}
-
-				// Handle special "Obtain X key items" objectives
-				let kiMatch = slot.match(/Obtain (\d+) key items/i);
-				if (index === -1 && kiMatch) {
-					// Store this for dynamic checking
-					kiObjectiveTargets[slot] = parseInt(kiMatch[1]);
-					return; // Don't try to set a specific objective index
 				}
 
 				if (index > -1) {
@@ -589,9 +580,10 @@
 					generatedObjectives.push(`Defeat ${modeflags.obosscollectorcount} Bosses`);
 				}
 
-				// Gold Hunter
+				// Gold Hunter - Omode:goldhunterN is in thousands of GP (goldhunter100 = 100,000 GP);
+				// the ticker counts in 1k steps
 				if (typeof modeflags !== 'undefined' && modeflags.ogoldhunter && modeflags.ogoldhuntercount) {
-					generatedObjectives.push(`Collect ${modeflags.ogoldhuntercount} Gold`);
+					generatedObjectives.push(`Bring ${modeflags.ogoldhuntercount}k GP to Tory`);
 				}
 
 				// Dark Matter Hunt
@@ -619,6 +611,31 @@
 								let displayName = formatObjectiveName(obj.name);
 								generatedObjectives.push(displayName);
 							}
+						}
+					}
+				}
+
+				// Named/fixed objectives from the flag string (O1:quest_forge, Omode:fiends,
+				// Omode:classicforge...). SetModes() marks these visible in objectives[]
+				// (2 = not in this seed); index i+4 corresponds to objectivenames[i].
+				if (typeof objectives !== 'undefined') {
+					if (objectives[0] !== 2) generatedObjectives.push('Classic: Forge the Crystal');
+					if (objectives[1] !== 2) generatedObjectives.push('Classic: Giant of Bab-il');
+					for (let i = 0; i < objectivenames.length; i++) {
+						if (objectives[i + 4] !== 2) generatedObjectives.push(objectivenames[i]);
+					}
+					// Random objectives aren't known until found in-game (or read from the
+					// ROM when connected); if the player typed them into the launcher's
+					// manual objectives box, those are listed below instead of placeholders.
+					if (manualObjectives.length === 0) {
+						// objectives[90..97] only has 8 slots; three random pools can exceed that
+						let randomSlots = 0;
+						for (let i = 90; i < 98; i++) {
+							if (objectives[i] !== 2) randomSlots++;
+						}
+						randomSlots = Math.max(randomSlots, parseInt(modeflags.orandomcount) || 0);
+						for (let i = 1; i <= randomSlots; i++) {
+							generatedObjectives.push(`Random objective ${i}`);
 						}
 					}
 				}
@@ -651,7 +668,7 @@
 
 						// Check if this objective requires a count
 						let bossMatch = generatedObjs[i].match(/Defeat (\d+) [Bb]osses?/i);
-						let goldMatch = generatedObjs[i].match(/Collect (\d+) [Gg]old/i);
+						let goldMatch = generatedObjs[i].match(/Bring (\d+)k GP to Tory/i);
 						let dmMatch = generatedObjs[i].match(/Collect (\d+) [Dd]ark [Mm]atter/i);
 						let kiMatch = generatedObjs[i].match(/Obtain (\d+) [Kk]ey [Ii]tems/i);
 
@@ -683,7 +700,7 @@
 								countDisplay.textContent = `${bosscount}/${target}`;
 							} else if (goldMatch) {
 								let target = parseInt(goldMatch[1]);
-								countDisplay.textContent = `${goldcount}/${target}`;
+								countDisplay.textContent = `${goldcount}k/${target}k`;
 							} else if (dmMatch) {
 								let target = parseInt(dmMatch[1]);
 								countDisplay.textContent = `${dmcount}/${target}`;
@@ -758,14 +775,23 @@
 					objItem.className = 'objective-item';
 
 					// Check if this is a boss counter objective (e.g., "Defeat 20 bosses")
-					let bossMatch = ti.objectives[i].match(/Defeat (\d+) [Bb]osses?/i);
+					let bossMatch = ti.objectives[i].match(/Defeat (\d+) boss(?:es)?/i);
+					// Gold Hunter / Dark Matter also carry a live per-slot progress byte
+					// (ti.objectiveProgress[i]) - see tracking_interface.js / objectives.js.
+					let goldMatch = ti.objectives[i].match(/Bring ([\d,]+) GP to Tory in Agart/i);
+					let dmMatch = ti.objectives[i].match(/Bring (\d+) DkMatters? to Kory in Agart/i);
+					let liveProgress = (ti.objectiveProgress && ti.objectiveProgress[i] !== undefined) ? ti.objectiveProgress[i] : 0;
 
 					if (bossMatch) {
 						// Boss counter objective - add counter display
 						let target = parseInt(bossMatch[1]);
 						objItem.textContent = ti.objectives[i] + ' (' + (bosscount || 0) + '/' + target + ')';
+					} else if (goldMatch || dmMatch) {
+						// The live byte for these is only 0/1 (turned in or not) - there is
+						// no running GP/DkMatter count to show, just the objective text
+						objItem.textContent = ti.objectives[i];
 					} else {
-						// Not a boss counter objective - just show the objective name
+						// Not a counted objective - just show the objective name
 						objItem.textContent = ti.objectives[i];
 					}
 
@@ -781,9 +807,16 @@
 							isComplete = true;
 						}
 					}
+					// Gold Hunter / Dark Matter: the patcher's threshold for these is 1 -
+					// the byte flips to 1 when the GP/DkMatters are turned in
+					else if (goldMatch || dmMatch) {
+						if (liveProgress >= 1) {
+							isComplete = true;
+						}
+					}
 					// Check for "Obtain X key items" objectives
-					else if (ti.objectives[i].match(/Obtain (\d+) key items/i)) {
-						let kiMatch = ti.objectives[i].match(/Obtain (\d+) key items/i);
+					else if (ti.objectives[i].match(/Obtain (\d+) key items?/i)) {
+						let kiMatch = ti.objectives[i].match(/Obtain (\d+) key items?/i);
 						let target = parseInt(kiMatch[1]);
 						// Calculate current key item count directly from keyitems array
 						let currentKICount = 0;
@@ -794,7 +827,9 @@
 								}
 							}
 						}
-						if (currentKICount >= target) {
+						// The ROM's own progress byte (threshold 1) is authoritative; the
+						// icon count covers the gap before it flips (or manual clicks)
+						if (currentKICount >= target || liveProgress >= 1) {
 							isComplete = true;
 						}
 					} else {

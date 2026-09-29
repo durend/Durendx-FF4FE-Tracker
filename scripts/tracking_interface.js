@@ -44,50 +44,34 @@ function tracking_interface() {
   }
 
   module.objectives = null;
+  module.objectiveTargets = null; // parsed {type, target} per objective, index-aligned with module.objectives
+  module.objectiveProgress = null; // raw live progress byte per objective, updated every poll (see keep_updating_kis)
   module.flags = null; // WARNING: Flags will be <hidden> on a mystery seed
   module.get_objectives_from_metadata = get_objectives_from_metadata;
-  async function get_objectives_from_metadata() {
-      return module.network.snes.send(JSON.stringify({
-         "Opcode" : "GetAddress",
-         "Space" : "SNES",
-         "Operands": ["0x1FF000", '400']
-      })).then(
-        (event) => {
-         return event.data.arrayBuffer()
-       }).then(
-       (metadata) => {
-         let x = new Uint8Array(metadata);
-         let bytes = x[0] + 256 * x[1];
-         let meta = new TextDecoder("utf-8").decode(x.slice(4,bytes+4));
-         console.log('Raw metadata:', meta);
-         try {
-           let parsedMeta = JSON.parse(meta);
-           module.objectives = parsedMeta.objectives;
-           module.flags = parsedMeta.flags.toUpperCase();
-           module.set_live_objectives();
-         } catch (e) {
-           console.error('Failed to parse ROM metadata JSON:', e);
-           console.log('Metadata string:', meta);
+  // Adapts the legacy usb2snes.js/network.js connection (module.network.snes)
+  // to the small readRom(offset, length) interface rom-metadata.js expects,
+  // so the actual two-stage read (fixes the old fixed-0x400-byte truncation
+  // bug) lives in one place instead of being duplicated here.
+  async function readRomViaLegacyClient(offset, length) {
+    const event = await module.network.snes.send(JSON.stringify({
+      Opcode: 'GetAddress',
+      Space: 'SNES',
+      Operands: [offset.toString(16), length.toString(16)],
+    }));
+    return new Uint8Array(await event.data.arrayBuffer());
+  }
 
-           // Fallback: Try to extract flags from truncated JSON
-           try {
-             let flagsMatch = meta.match(/"flags":\s*"([^"]+)"/);
-             if (flagsMatch && flagsMatch[1]) {
-               console.log('Extracted flags from truncated metadata:', flagsMatch[1]);
-               module.flags = flagsMatch[1].toUpperCase();
-               module.objectives = null; // Set to null since they're truncated
-               // Parse flags manually by calling FlagStringParser
-               if (typeof FlagStringParser === 'function') {
-                 console.log('Calling FlagStringParser with extracted flags');
-                 FlagStringParser(module.flags);
-               }
-             }
-           } catch (e2) {
-             console.error('Failed to extract flags from truncated metadata:', e2);
-           }
-         }
-         return;
-     });
+  async function get_objectives_from_metadata() {
+    try {
+      const meta = await readRomMetadata({ readRom: readRomViaLegacyClient });
+      console.log('ROM metadata loaded: version', meta.version, meta.objectives ? `- ${meta.objectives.length} objectives` : '- no objectives array');
+      module.objectives = meta.objectives;
+      module.objectiveTargets = (meta.objectives || []).map(parseObjectiveTarget);
+      module.flags = meta.flags; // rom-metadata.js already uppercases and nulls out "(hidden)"
+      module.set_live_objectives();
+    } catch (e) {
+      console.error('Failed to read/parse ROM metadata:', e.message);
+    }
   }
 
   // This can handle arbitrary length objectives, but doesn't appear to work on emulators
@@ -210,10 +194,19 @@ function tracking_interface() {
              }
            }
            if (module.objectives) {
-             // Track objective changes for debugging
+             // Objectives__Progress is a raw per-slot counter, not a bit -
+             // completion is progress >= target, not "nonzero". A simple
+             // quest/boss/char objective has target 1 so this is equivalent
+             // to the old nonzero check there, but counted objectives
+             // (Boss Collector/Gold Hunter/Dark Matter/Key Item Hunt) have
+             // targets in the tens or thousands and would previously have
+             // been marked complete the instant progress ticked off zero.
+             // Targets are parsed once from the description text in
+             // get_objectives_from_metadata() (see objectives.js).
              let objState = [];
              for (let i=0; i < module.objectives.length; i++) {
-               if (!!memory[0x20 + i]) {
+               let target = (module.objectiveTargets && module.objectiveTargets[i]) ? module.objectiveTargets[i].target : 1;
+               if (memory[0x20 + i] >= target) {
                  objState.push(module.objectives[i]);
                }
              }
@@ -224,8 +217,14 @@ function tracking_interface() {
                module._lastObjState = currentObjState;
              }
 
+             // Raw per-objective progress bytes, exposed for UI progress
+             // counters (Gold Hunter/Dark Matter/Boss Collector all need
+             // "current/target" display, not just a pass/fail boolean).
+             module.objectiveProgress = Array.from(memory.slice(0x20, 0x20 + module.objectives.length));
+
              for (let i=0; i < module.objectives.length; i++) {
-               module.set_objective(module.objectives[i], !!memory[0x20 + i]);
+               let target = (module.objectiveTargets && module.objectiveTargets[i]) ? module.objectiveTargets[i].target : 1;
+               module.set_objective(module.objectives[i], memory[0x20 + i] >= target);
              }
            }
            // Read boss count from Stats_Bosses at offset 0x7C

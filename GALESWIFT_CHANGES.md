@@ -46,20 +46,28 @@ This is an enhanced version of the FFIV Free Enterprise Tracker updated to suppo
    - Displays all rewards with their requirements
    - Lists all objectives in each group with checkmarks for completion
 
-## Galeswift Features NOT Yet Implemented
+## Galeswift v4.6.4 / v4.7.0 Support (tracker v1.03)
 
-The following Galeswift features are planned for future updates:
+Now supported:
+- **Omode:dkmatterN**: Dark Matter hunt counter (5-45)
+- **Omode:kiN**: Key Item hunt, counted automatically from the Key Items panel
+- **Omode:external**: External objective (manual toggle)
+- **Omode:goldhunterN**: amount shown correctly in thousands of GP
+- **Additional random objective pools**: `Orandom2:` / `Orandom3:` and `tough_quest`
+- **Seed Notes panel**: Ctreasure, Kstart, Ogated, Ohardreq, Sprice, Spricey, Smixed, Ssame, Ssingles
 
-- **Ctreasure flags**: Character locations in treasure chests
-- **Gated objectives**: Visual indication of gated objectives
-- **Hard required objectives**: Display of hard required objective status
-- **KStart**: Display of starting key items
-- **Additional random objective pools**: Support for extra random objective buckets
-- **Enhanced shop flags**: Sprice, Smixed, Ssame, Ssingles tracking
+Galeswift v4.7.0 added no flags that change what the tracker needs to show
+(new flags such as `Cstatscap`, `Zdrain`, `-infarrows`, `-warpitem`,
+`-t8scramble` and `-singleuse` are accepted and ignored).
+
+Still not implemented:
+- Pre-checking the starting key item from `Kstart` (it is shown in Seed Notes instead)
+- Characters shown in specific treasure chests for `Ctreasure`
+- Binary (`b...`/`c...`) flag strings: paste the text form of the flags
 
 ## Usage
 
-1. Launch the tracker from [index.html](index.html)
+1. Launch the tracker from [launcher.html](launcher.html)
 2. Paste your Galeswift seed flags (supports both vanilla FE and Galeswift flags)
 3. Configure optional settings
 4. Click "LAUNCH TRACKER"
@@ -132,7 +140,7 @@ All original tracker functionality remains intact:
 
 - **Original Tracker**: BigDunka
 - **Galeswift Fork**: Galeswift
-- **Galeswift Tracker Updates**: Your implementation here
+- **Galeswift Tracker Updates**: Durendx
 - **FE Base**: HungryTenor, b0ardface, and the FE development team
 
 ## License
