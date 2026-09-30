@@ -139,6 +139,11 @@ function tracking_interface() {
   }
 
   function keep_updating_kis() {
+    // Skip this tick if the previous poll hasn't come back yet (slow devices
+    // would otherwise pile up requests)
+    if (module._pollInFlight) return;
+    module._pollInFlight = true;
+
     let count = 0x20;
     if (module.objectives) {
       count += module.objectives.length;
@@ -348,7 +353,7 @@ function tracking_interface() {
            // Don't call ApplyChecks every cycle - it's called when party changes
            // and when hook route changes, which is sufficient
      },
-     (err) => { /* console.log("bleh" + err) */ });
+     (err) => { /* console.log("bleh" + err) */ }).finally(() => { module._pollInFlight = false; });
    }
 
    module.auto_set_ki = (a,b) => {}

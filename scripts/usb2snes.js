@@ -46,38 +46,83 @@ function usb2snes() {
         });
     }
 
-    methods.send = send;
-    async function send(msg, noReply = false, timeOut = 1) {
-        return new Promise(function (resolve, reject) {
-            if (busy) {
-                reject("BUSY");
-            }
+    // Requests go out one at a time, in order: each waits for the previous
+    // reply. (Previously an overlapping request was "rejected" as BUSY but sent
+    // anyway and took over the reply handler, so replies could land on the
+    // wrong request - rare on emulators, constant on slow hardware.)
+    //
+    // A GetAddress reply can arrive split over several binary messages
+    // (common with FXPak/SD2SNES); the chunks are collected until the full
+    // requested length has arrived, and the caller gets { data: Blob } as
+    // before. If a reply never completes, the socket is closed so stray late
+    // chunks can't be mistaken for the next reply; network.js reconnects.
+    const REPLY_TIMEOUT_MS = 3000;
+    let queue = Promise.resolve();
 
-            busy = true;
+    function expectedReplyBytes(msg) {
+        try {
+            const m = JSON.parse(msg);
+            if (m.Opcode !== "GetAddress" || !Array.isArray(m.Operands)) return 0;
+            let total = 0;
+            for (let i = 1; i < m.Operands.length; i += 2) {
+                total += parseInt(m.Operands[i], 16) || 0;
+            }
+            return total;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    methods.send = send;
+    function send(msg, noReply = false, timeOut = 1) {
+        const run = () => new Promise(function (resolve, reject) {
+            if (!ws || ws.readyState !== 1) {
+                reject("NOT_CONNECTED");
+                return;
+            }
             ws.send(msg);
 
             if (noReply) {
-                busy = false;
                 setTimeout(function () { resolve(true); }, timeOut);
                 return;
-            } else {
-                setTimeout(function () {
-                    busy = false;
-                    reject(false);
-                }, 1000);
             }
 
-            ws.onmessage = function (event) {
-                busy = false;
-                resolve(event);
+            const expected = expectedReplyBytes(msg);
+            const chunks = [];
+            let received = 0;
+            const socket = ws;
+
+            const timer = setTimeout(function () {
+                socket.onmessage = null;
+                try { socket.close(); } catch (e) { /* already closing */ }
+                reject(false);
+            }, REPLY_TIMEOUT_MS);
+
+            socket.onmessage = function (event) {
+                if (expected > 0 && event.data instanceof Blob) {
+                    chunks.push(event.data);
+                    received += event.data.size;
+                    if (received < expected) return;
+                    clearTimeout(timer);
+                    socket.onmessage = null;
+                    resolve({ data: new Blob(chunks).slice(0, expected) });
+                } else {
+                    clearTimeout(timer);
+                    socket.onmessage = null;
+                    resolve(event);
+                }
             };
 
-            ws.onerror = function (err) {
-                busy = false;
+            socket.onerror = function (err) {
+                clearTimeout(timer);
                 reject(err);
             };
-          });
-      }
+        });
+
+        const result = queue.then(run, run);
+        queue = result.catch(function () {});
+        return result;
+    }
 
     methods.getFile = getFile;
     async function getFile(msg, noReply = false, timeOut = 1) {

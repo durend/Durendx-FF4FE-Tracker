@@ -193,6 +193,20 @@ Comprehensive support for FF4FE flags including:
 
 - Added boss name tooltips - hover over any boss icon to see its full name
 
+## Changes (v1.03.1)
+
+Hotfix for auto-tracking on real hardware (FXPak Pro / SD2SNES).
+
+- Fixed bosses sometimes not being auto-tracked on hardware (e.g. both Dwarf
+  Castle bosses)
+- Fixed the main cause of items, checks, objectives and the party
+  flickering on hardware: replies from QUsb2Snes arrive more slowly and in
+  pieces on hardware, and the tracker could mix up replies between its
+  requests. Requests are now sent one at a time and each reply is read in
+  full
+- Fixed the seed not always being recognized on hardware, which could stop
+  your saved progress from coming back
+
 ## Changes (v1.03)
 
 Updated and tested for **Galeswift v4.7.0** (all 61 official presets plus
@@ -266,18 +280,15 @@ fork-specific flag combinations load cleanly).
 - Without auto-tracking, progress survives refreshing the page; a new launch
   from the launcher starts clean
 
-### Known issues (v1.03)
+### Known issues (v1.03) - addressed in v1.03.1
 
 - **Flickering on real hardware (FXPak Pro / SD2SNES):** items, checks,
-  objectives or party members may briefly blink off and back on, most
-  noticeably during battles. This happens because the tracker reads the
-  game's memory over USB several times a second, and the FXPak keeps its own
-  copy of the console's memory by watching what the game writes. During busy
-  moments like battles, a read can land while that copy is mid-update and
-  return a momentarily wrong value. The tracker already ignores very short
-  misreads, but on hardware some last long enough to show. The blink
-  corrects itself on the next good read and no progress is lost. A fix is
-  planned for a future update; emulators are much less affected
+  objectives or party members could briefly blink off and back on, most
+  noticeably during battles, and some bosses (e.g. Dwarf Castle) weren't
+  auto-tracked. The main cause turned out to be how the tracker talked to
+  QUsb2Snes: on hardware, replies arrive more slowly and in pieces, and the
+  tracker could mix up replies between requests. v1.03.1 fixes this; if you
+  still see flicker on hardware, please report it
 
 ## Credits
 
@@ -303,5 +314,5 @@ For issues, questions, or feature requests:
 
 ---
 
-**Version**: 1.03
+**Version**: 1.03.1
 **Last Updated**: September 2026
