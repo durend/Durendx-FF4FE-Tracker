@@ -2,7 +2,11 @@ function tracking_interface() {
   let timerID;
   let module = {};
   let partyUpdateCounter = 0; // Counter to throttle party updates
+  let seedCheckCounter = 0; // Counter to throttle the seed re-check
   let lastPartyState = ''; // Track previous party composition to detect changes
+  const PARTY_STABLE_READS = 2; // consecutive identical reads needed before a party change is shown
+  let pendingPartyState = null;
+  let pendingPartyReads = 0;
   let lastHookRoute = null; // Track previous hook route state to detect changes
 
   module.network = null;
@@ -68,6 +72,8 @@ function tracking_interface() {
       module.objectives = meta.objectives;
       module.objectiveTargets = (meta.objectives || []).map(parseObjectiveTarget);
       module.flags = meta.flags; // rom-metadata.js already uppercases and nulls out "(hidden)"
+      module.seed = meta.seed; // identifies this seed (per-seed saved tracker state)
+      module.seed_loaded(meta.seed, meta.version);
       module.set_live_objectives();
     } catch (e) {
       console.error('Failed to read/parse ROM metadata:', e.message);
@@ -101,6 +107,37 @@ function tracking_interface() {
   }
 
   module.keep_updating_kis = keep_updating_kis
+  // The $7E1500 tracker block is re-read every 100 ms and occasionally reads
+  // wrong for a moment, which made key items, check locations, character
+  // spots and objectives flicker (and, before, could wipe locations). Every
+  // byte's new value is only accepted after it has read the same way
+  // BLOCK_STABLE_READS times in a row (~0.3 s); the very first read is
+  // accepted as-is. All tracking below only ever sees these settled values.
+  const BLOCK_STABLE_READS = 3;
+  let stableBlock = null, candidateBlock = null, candidateReads = null;
+  function stabilize_tracker_block(raw) {
+    if (!stableBlock || stableBlock.length !== raw.length) {
+      stableBlock = raw.slice();
+      candidateBlock = raw.slice();
+      candidateReads = new Uint8Array(raw.length);
+      return stableBlock.slice();
+    }
+    for (let i = 0; i < raw.length; i++) {
+      if (raw[i] === stableBlock[i]) {
+        candidateReads[i] = 0;
+      } else if (raw[i] === candidateBlock[i] && candidateReads[i] > 0) {
+        if (++candidateReads[i] >= BLOCK_STABLE_READS) {
+          stableBlock[i] = raw[i];
+          candidateReads[i] = 0;
+        }
+      } else {
+        candidateBlock[i] = raw[i];
+        candidateReads[i] = 1;
+      }
+    }
+    return stableBlock.slice();
+  }
+
   function keep_updating_kis() {
     let count = 0x20;
     if (module.objectives) {
@@ -119,7 +156,7 @@ function tracking_interface() {
        return event_ki.data.arrayBuffer()
      }).then(
        (arrBuf) => {
-         let memory = new Uint8Array(arrBuf);
+         let memory = stabilize_tracker_block(new Uint8Array(arrBuf));
 
          for (let i = 0; i <= 2; i++) {
             for (let b = 0; b < 8; b++) {
@@ -268,6 +305,21 @@ function tracking_interface() {
            }
 
            // Only read party member data every 10 cycles (once per second) to avoid spam
+           // Every ~15 seconds, re-read the seed ID from the ROM so a swapped ROM
+           // is noticed (the tracker then saves the old seed and reloads)
+           seedCheckCounter++;
+           if (seedCheckCounter >= 150 && module.seed) {
+             seedCheckCounter = 0;
+             readRomMetadata({ readRom: readRomViaLegacyClient }).then(
+               (meta) => {
+                 if (meta.seed && meta.seed !== module.seed) {
+                   module.seed = meta.seed;
+                   module.seed_loaded(meta.seed, meta.version);
+                 }
+               }
+             ).catch(() => {}); // mid-swap / loading reads are ignored
+           }
+
            partyUpdateCounter++;
            if (partyUpdateCounter >= 10) {
              partyUpdateCounter = 0;
@@ -331,6 +383,7 @@ function tracking_interface() {
     module.set_hook_route = (a) => {} // Will be set by tracker.html
     module.set_boss_count = (a) => {} // Will be set by tracker.html
     module.boss_defeated = (a) => {} // Will be set by tracker.html - formation ID of a boss fight just won
+    module.seed_loaded = (a, b) => {} // Will be set by tracker.html - seed ID and version from the ROM metadata
     module.apply_checks = () => {} // Will be set to ApplyChecks by tracker.html
     module.notify_character_gained = (a) => {} // Will be set by tracker.html - called when a new character joins
 
@@ -341,6 +394,7 @@ function tracking_interface() {
     // the game uses for the Pass door. Reported only when it changes.
     const PASS_ITEM_CODE = 0xEC;
     let lastHasPass = null;
+    let pendingHasPass = null;
     function update_pass_from_inventory(memory) {
       if (memory.length < 0x4A0) return;
       let hasPass = false;
@@ -350,9 +404,17 @@ function tracking_interface() {
           break;
         }
       }
+      // like the party, a change must read the same way twice in a row (~1 s apart)
       if (hasPass !== lastHasPass) {
-        lastHasPass = hasPass;
-        set_ki(0x11, hasPass);
+        if (hasPass === pendingHasPass) {
+          lastHasPass = hasPass;
+          pendingHasPass = null;
+          set_ki(0x11, hasPass);
+        } else {
+          pendingHasPass = hasPass;
+        }
+      } else {
+        pendingHasPass = null;
       }
     }
 
@@ -393,9 +455,33 @@ function tracking_interface() {
 
       let currentPartyState = partyStateArray.join(',');
 
-      // Only update if party composition changed
-      if (currentPartyState !== lastPartyState) {
+      // Party memory occasionally reads mid-change (menus, battle transitions),
+      // which made the party panel flicker. Only accept a new composition once
+      // it has been read the same way PARTY_STABLE_READS times in a row (reads
+      // are ~1 second apart), and never accept an empty party - the game always
+      // has at least one character, so an empty read is always a glitch.
+      if (partyStateArray.length === 0) {
+        pendingPartyState = null;
+        pendingPartyReads = 0;
+      } else if (currentPartyState !== lastPartyState) {
+        if (currentPartyState === pendingPartyState) {
+          pendingPartyReads++;
+        } else {
+          pendingPartyState = currentPartyState;
+          pendingPartyReads = 1;
+        }
+      } else {
+        // back to the shown party: whatever was pending was a glitch
+        pendingPartyState = null;
+        pendingPartyReads = 0;
+      }
+
+      // Only update if party composition changed (and the change is stable)
+      if (partyStateArray.length > 0 && currentPartyState !== lastPartyState &&
+          pendingPartyReads >= PARTY_STABLE_READS) {
         lastPartyState = currentPartyState;
+        pendingPartyState = null;
+        pendingPartyReads = 0;
 
         // Get party limit from modeflags (if available)
         let partyLimit = (typeof modeflags !== 'undefined' && modeflags.climit) ? parseInt(modeflags.climit) : 5;

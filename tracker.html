@@ -24,7 +24,8 @@
 			<script src="./scripts/network.js"></script>
 			<script src="./scripts/rom-metadata.js?v=2403"></script>
 			<script src="./scripts/objectives.js?v=2403"></script>
-			<script src="./scripts/tracking_interface.js?v=2405"></script>
+			<script src="./scripts/tracking_interface.js?v=2408"></script>
+			<script src="./scripts/persistence.js?v=2408"></script>
 
 			<script type="text/javascript">
 			let ti = new tracking_interface();
@@ -1109,7 +1110,7 @@
 				<div id="locations-characters-row" class="top-row">
 					<!-- LOCATIONS -->
 					<div class="section locations-section" onclick="unhideAllKeyItemLocations(event)">
-						<div class="section-header" onclick="unhideAllKeyItemLocations(event)">LOCATIONS</div>
+						<div class="section-header" onclick="unhideAllKeyItemLocations(event)">CHECKS</div>
 						<div id="locationslist" class="locations-list">
 							<!-- Locations will be populated by JavaScript -->
 						</div>
@@ -1387,6 +1388,8 @@
 
 		// Launcher toggle "Auto-Track Bosses" (URL param ab); on unless ab=0
 		const autoBossTracking = getParameterByName('ab') !== '0';
+
+		ti.seed_loaded = (seed, version) => TrackerSave.seedLoaded(seed, version);
 
 		ti.boss_defeated = (formation) => {
 			if (!autoBossTracking) return;
@@ -1672,6 +1675,11 @@
 				}
 				ApplyChecks(); // ApplyChecks now handles Knofree:dwarf flag internally
 				applyV2LocationStyling();
+				// Saved tracker state (persistence.js): manual mode restores this launch now;
+				// auto-tracking restores per seed once the ROM's seed ID is read
+				if (!(getParameterByName('a') || '').startsWith('1')) {
+					TrackerSave.startSession(getParameterByName('r'));
+				}
 			}
 
 			// Initialize autotracking connection if enabled

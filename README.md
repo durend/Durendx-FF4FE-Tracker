@@ -251,12 +251,38 @@ fork-specific flag combinations load cleanly).
   two Paloms) and no longer keeps a stale character after saving
 - Clicking Mist Dragon in the Boss Tracker now opens Rydia's Mom under
   `Knofree` (the click previously only changed the icon)
+- Auto-tracking: brief misreads of the game's memory are now filtered out
+  (a value has to read the same way several times in a row before the
+  tracker shows it), which cuts down on items, checks and the party
+  flickering
+- The **Locations** panel is now called **Checks**
+
+**Your progress is now saved**
+- With auto-tracking, everything you've tracked for a seed (bosses, checks,
+  key items, objectives, counters, notes, party) is saved automatically and
+  comes back when you refresh or relaunch the tracker on that same seed. The
+  tracker recognizes the seed from the ROM, so a different seed always
+  starts clean, and swapping ROMs while connected is detected
+- Without auto-tracking, progress survives refreshing the page; a new launch
+  from the launcher starts clean
+
+### Known issues (v1.03)
+
+- **Flickering on real hardware (FXPak Pro / SD2SNES):** items, checks,
+  objectives or party members may briefly blink off and back on, most
+  noticeably during battles. This happens because the tracker reads the
+  game's memory over USB several times a second, and the FXPak keeps its own
+  copy of the console's memory by watching what the game writes. During busy
+  moments like battles, a read can land while that copy is mid-update and
+  return a momentarily wrong value. The tracker already ignores very short
+  misreads, but on hardware some last long enough to show. The blink
+  corrects itself on the next good read and no progress is lost. A fix is
+  planned for a future update; emulators are much less affected
 
 ## Credits
 
 - **Original Tracker**: Created by [Dunka](https://github.com/Dunkalunk)
 - **Enhanced Version**: Maintained and enhanced by Durendx
-- **Development Assistance**: Claude Code
 - **Galeswift Fork Support**: Objective system enhancements
 
 ## License
