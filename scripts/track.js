@@ -1389,6 +1389,16 @@ function SetModes(overrideFlags) {
 						modeflags.ospoon = true;
 						break;
 					case '-PUSHBTOJUMP':
+						// BUG FIXED (2026-09-30): this used to be treated as a logic-bypass
+						// condition ("|| modeflags.opushbtojump") on ~12 key-item/prerequisite
+						// gates throughout ApplyChecks(), showing e.g. Tower of Zot, Baron
+						// Castle and Magnes Cave as available with no Earth Crystal/Baron
+						// Key/TwinHarp in inventory. But per the live generator's own
+						// description, -Pushbtojump is an April Fools joke mode ("Push B to
+						// Jump") that explicitly "does not affect the randomized placement
+						// of progression items" - it has nothing to do with skipping any
+						// prerequisite. Still parsed (in case something cosmetic wants it
+						// later) but no longer used to gate anything.
 						modeflags.opushbtojump = true;
 						break;
 					default:
@@ -1470,41 +1480,20 @@ function SetModes(overrideFlags) {
 }
 
 // Helper function to set summon/moon location states based on flags
+// BUG FIXED (2026-09-30): this used to force BARON_ODIN/FEY_ASURA/
+// FEY_LEVIATHAN/SYLPH_CAVE/BAHAMUT and all 5 MOON_* locations to state 3
+// ("hidden") whenever Ksummon/Kmoon was absent from the flags. But
+// Ksummon/Kmoon only mean "key items CAN be placed as summon-boss/moon-boss
+// rewards" (confirmed against the real flagspec) - they say nothing about
+// whether the location itself is reachable. ApplyChecks() already has its
+// own, more specific gating for these exact locations (underworld access /
+// Darkness Crystal obtained), but ActivateKeyItemLocation() only ever
+// transitions state 0->1 - once this function forced state 3, ApplyChecks()'s
+// activation could never take effect again for the rest of the session, for
+// any seed that doesn't set Ksummon/Kmoon (most seeds, since it's just one
+// placement option among several). Fix: stop force-hiding here and let
+// ApplyChecks() be the sole authority on these locations' visibility.
 function applyKSummonKMoonFlags() {
-	// Helper to set location state without overwriting completed (2) or grayed completed (4)
-	function safeSetLocationState(locationId, newState) {
-		if (keyitemlocations[locationId] !== 2 && keyitemlocations[locationId] !== 4) {
-			keyitemlocations[locationId] = newState;
-		}
-	}
-
-	if (!modeflags.ksummon) {
-		safeSetLocationState(KeyItemCheck.BARON_ODIN, 3); //Odin
-		safeSetLocationState(KeyItemCheck.FEY_ASURA, 3); //Asura
-		safeSetLocationState(KeyItemCheck.FEY_LEVIATHAN, 3); //Leva
-		safeSetLocationState(KeyItemCheck.SYLPH_CAVE, 3); //Slyph
-		safeSetLocationState(KeyItemCheck.BAHAMUT, 3); //Bahamut
-	} else {
-		safeSetLocationState(KeyItemCheck.BARON_ODIN, 0); //Odin
-		safeSetLocationState(KeyItemCheck.FEY_ASURA, 0); //Asura
-		safeSetLocationState(KeyItemCheck.FEY_LEVIATHAN, 0); //Leva
-		safeSetLocationState(KeyItemCheck.SYLPH_CAVE, 0); //Slyph
-		safeSetLocationState(KeyItemCheck.BAHAMUT, 0); //Bahamut
-	}
-
-	if (!modeflags.kmoon) {
-		safeSetLocationState(KeyItemCheck.MOON_CRYSTAL, 3); //Lunar Crystal
-		safeSetLocationState(KeyItemCheck.MOON_MASAMUNE, 3); //Lunar Masa
-		safeSetLocationState(KeyItemCheck.MOON_MURASAME, 3); //Lunar Mura
-		safeSetLocationState(KeyItemCheck.MOON_RIBBON, 3); //Lunar Ribbon
-		safeSetLocationState(KeyItemCheck.MOON_WHITE, 3); //Lunar White
-	} else {
-		safeSetLocationState(KeyItemCheck.MOON_CRYSTAL, 0); //Lunar Crystal
-		safeSetLocationState(KeyItemCheck.MOON_MASAMUNE, 0); //Lunar Masa
-		safeSetLocationState(KeyItemCheck.MOON_MURASAME, 0); //Lunar Mura
-		safeSetLocationState(KeyItemCheck.MOON_RIBBON, 0); //Lunar Ribbon
-		safeSetLocationState(KeyItemCheck.MOON_WHITE, 0); //Lunar White
-	}
 }
 
 function SetFlagOptions() {
@@ -1900,7 +1889,7 @@ function SetFlagOptions() {
 
 
 function ApplyChecks(){
-	var hasunderworldaccess = (keyitems[KeyItem.MAGMA_KEY] === true || ((keyitems[KeyItem.HOOK] === true || modeflags.opushbtojump) && hookclear === true));
+	var hasunderworldaccess = (keyitems[KeyItem.MAGMA_KEY] === true || ((keyitems[KeyItem.HOOK] === true) && hookclear === true));
 
 	// ****Key Items****
 	if (disableloctracker === '0') {
@@ -1915,13 +1904,13 @@ function ApplyChecks(){
 		
 		//Baron Castle [King]
 		DeactivateKeyItemLocation(KeyItemCheck.BARON_KING);
-		if (keyitems[KeyItem.BARON_KEY] === true || modeflags.opushbtojump) {
+		if (keyitems[KeyItem.BARON_KEY] === true) {
 			ActivateKeyItemLocation(KeyItemCheck.BARON_KING);
 		}
 		
 		//Baron Castle [Odin]
 		DeactivateKeyItemLocation(KeyItemCheck.BARON_ODIN);
-		if (keyitems[KeyItem.BARON_KEY] === true || modeflags.opushbtojump) {
+		if (keyitems[KeyItem.BARON_KEY] === true) {
 			ActivateKeyItemLocation(KeyItemCheck.BARON_ODIN);
 		}
 		
@@ -1945,7 +1934,7 @@ function ApplyChecks(){
 
 		//Magnes Cave
 		DeactivateKeyItemLocation(KeyItemCheck.MAGNES);
-		if (keyitems[KeyItem.TWINHARP] === true || modeflags.opushbtojump) {
+		if (keyitems[KeyItem.TWINHARP] === true) {
 			ActivateKeyItemLocation(KeyItemCheck.MAGNES);
 		}
 		
@@ -1960,7 +1949,7 @@ function ApplyChecks(){
 
 		//Tower of Zot
 		DeactivateKeyItemLocation(KeyItemCheck.TOWER_ZOT);
-		if (keyitems[KeyItem.EARTH_CRYSTAL] === true || modeflags.opushbtojump) {
+		if (keyitems[KeyItem.EARTH_CRYSTAL] === true) {
 			ActivateKeyItemLocation(KeyItemCheck.TOWER_ZOT);
 		}	
 
@@ -2063,7 +2052,7 @@ function ApplyChecks(){
 		
 		//Hook Route
 		DeactivateKeyItemLocation(KeyItemCheck.HOOK_ROUTE);
-		if ((keyitems[KeyItem.HOOK] === true || modeflags.opushbtojump) && keyitems[KeyItem.MAGMA_KEY] === false && hookclear === false) {
+		if ((keyitems[KeyItem.HOOK] === true) && keyitems[KeyItem.MAGMA_KEY] === false && hookclear === false) {
 			ActivateKeyItemLocation(KeyItemCheck.HOOK_ROUTE);
 		}
 		
@@ -2073,7 +2062,7 @@ function ApplyChecks(){
 			if (characterlocations[CharacterCheck.BARON_CASTLE] !== 2) characterlocations[CharacterCheck.BARON_CASTLE] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.BARON_CASTLE);
-			if (keyitems[KeyItem.BARON_KEY] === true || modeflags.opushbtojump) {
+			if (keyitems[KeyItem.BARON_KEY] === true) {
 				ActivateCharacterLocation(CharacterCheck.BARON_CASTLE);
 			}
 		}
@@ -2097,13 +2086,19 @@ function ApplyChecks(){
 			if (characterlocations[CharacterCheck.EBLAN_CAVE] !== 2) characterlocations[CharacterCheck.EBLAN_CAVE] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.EBLAN_CAVE);
-			if (keyitems[KeyItem.HOOK] === true || modeflags.opushbtojump) {
+			if (keyitems[KeyItem.HOOK] === true) {
 				ActivateCharacterLocation(CharacterCheck.EBLAN_CAVE);
 			}
 		}
 
 		//Giant of Babil (earned - hidden by Cnoearned)
-		if (earnedCharacterSpotsEmpty()) {
+		// Cnogiant ("No character at Giant" per the live generator): no
+		// character ever joins here for this seed - was parsed into
+		// modeflags.cnogiant but never actually checked anywhere (found
+		// 2026-09-30), so this location kept showing as available once the
+		// Darkness Crystal was obtained even on Cnogiant seeds. Fixed: treat
+		// it the same as an empty earned spot (force hidden).
+		if (earnedCharacterSpotsEmpty() || modeflags.cnogiant) {
 			if (characterlocations[CharacterCheck.GIANT_BABIL] !== 2) characterlocations[CharacterCheck.GIANT_BABIL] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.GIANT_BABIL);
@@ -2158,7 +2153,7 @@ function ApplyChecks(){
 			if (characterlocations[CharacterCheck.TOWER_ZOT] !== 2) characterlocations[CharacterCheck.TOWER_ZOT] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.TOWER_ZOT);
-			if (keyitems[KeyItem.EARTH_CRYSTAL] === true || modeflags.opushbtojump) {
+			if (keyitems[KeyItem.EARTH_CRYSTAL] === true) {
 				ActivateCharacterLocation(CharacterCheck.TOWER_ZOT);
 			}
 		}
@@ -2201,7 +2196,7 @@ function ApplyChecks(){
 
 		//Eblan Cave
 		DeactivateTownLocation(Town.EBLAN_CAVE);
-		if (keyitems[KeyItem.HOOK] === true || modeflags.opushbtojump) {
+		if (keyitems[KeyItem.HOOK] === true) {
 			ActivateTownLocation(Town.EBLAN_CAVE);
 		}
 		
@@ -2255,7 +2250,7 @@ function ApplyChecks(){
 
 		//Eblan Cave
 		DeactivateTrappedLocation(Trap.EBLAN_CAVE);
-		if (keyitems[KeyItem.HOOK] === true || modeflags.opushbtojump) {
+		if (keyitems[KeyItem.HOOK] === true) {
 			ActivateTrappedLocation(Trap.EBLAN_CAVE);
 		}
 
@@ -2270,7 +2265,7 @@ function ApplyChecks(){
 		
 		//Upper Babil
 		DeactivateTrappedLocation(Trap.UPPER_BABIL);
-		if (keyitems[KeyItem.HOOK] === true || modeflags.opushbtojump) {
+		if (keyitems[KeyItem.HOOK] === true) {
 			ActivateTrappedLocation(Trap.UPPER_BABIL);
 		}
 
@@ -3192,6 +3187,10 @@ function ClearWarpGlitch() {
 //   - Xkicheckbonus:N: +N% per key item gained after the starting item
 //   - Xobjectivebonus:N: +N% per completed objective (:num = 100% split across
 //     all of the seed's objectives)
+//   - Xzonkbonus:N: +N% per "zonk" - a key-item-check location that gave
+//     neither a key item nor a character. Approximated as (key-item-check
+//     locations cleared) - (key items in inventory), since the tracker
+//     doesn't separately track "check gave a character" from "gave nothing".
 var objectivesCompletedCount = 0;
 var objectivesTotalCount = 0;
 
@@ -3233,6 +3232,19 @@ function updateXPModifier(itemcount) {
 		if (objBonus > 0) {
 			multiplier *= 1 + objectivesCompletedCount * objBonus / 100;
 			parts.push('+' + objBonus.toFixed(1).replace(/\.0$/, '') + '% per completed objective (' + objectivesCompletedCount + '/' + objectivesTotalCount + ')');
+		}
+	}
+
+	var zonkBonus = parseInt(modeflags.xzonkbonus);
+	if (zonkBonus > 0 && typeof keyitemlocations !== 'undefined') {
+		var checksCleared = 0;
+		for (var kl = 0; kl < keyitemlocations.length; kl++) {
+			if (keyitemlocations[kl] === 2 || keyitemlocations[kl] === 4) checksCleared++;
+		}
+		var zonkCount = Math.max(0, checksCleared - itemcount);
+		if (zonkCount > 0) {
+			multiplier *= 1 + zonkCount * zonkBonus / 100;
+			parts.push('+' + zonkBonus + '% per zonk (~' + zonkCount + ')');
 		}
 	}
 

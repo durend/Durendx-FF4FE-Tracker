@@ -193,6 +193,15 @@ Comprehensive support for FF4FE flags including:
 
 - Added boss name tooltips - hover over any boss icon to see its full name
 
+## Changes (v1.03.2)
+
+Hotfix for four pre-existing tracking bugs, found and verified while building separate Alpha 5.0 support (identical code, not specific to any flag version).
+
+- Fixed `Xzonkbonus:N` (a real Galeswift X flag) being parsed but never actually applied to the XP modifier - it was dead code
+- Fixed `-Pushbtojump` (an April Fools joke mode that explicitly doesn't affect item placement) being mistakenly treated as a universal bypass on ~12 key-item/character/town prerequisite checks - Tower of Zot, Baron Castle, Magnes Cave and others could show as available with none of their prerequisite key items
+- Fixed `Ksummon`/`Kmoon`-gated locations (Baron Odin, Fey Asura/Leviathan, Sylph Cave, Bahamut, all 5 Lunar locations) getting permanently stuck hidden on any seed that doesn't set those flags (most seeds), even after their real prerequisite (Darkness Crystal) was obtained
+- Fixed `Cnogiant` ("no character at Giant of Bab-il") being parsed but never applied - that character location kept showing as available regardless of the flag
+
 ## Changes (v1.03.1)
 
 Hotfix for auto-tracking on real hardware (FXPak Pro / SD2SNES).
@@ -314,5 +323,5 @@ For issues, questions, or feature requests:
 
 ---
 
-**Version**: 1.03.1
+**Version**: 1.03.2
 **Last Updated**: September 2026
