@@ -413,13 +413,14 @@ function tracking_interface() {
              module._lastBossCount = bossCount;
            }
 
-           // Battle results screen ("Received N Exp. (M x)"): while it is up,
-           // $7E00A6-A9 = 00 02 30 05, $7E00AA = multiplier x1000 (16-bit),
-           // $7E00AD = Exp received (24-bit). Confirmed on Alpha 5.0 / SD2SNES
-           // 2026-09-30: 12015 @ 2756 and 98280 @ 2808. Scratch memory, gone ~6s
-           // later. Unverified on 4.x - without the signature the formula is kept.
+           // Alpha 5.0 battle results screen ("Received N Exp. (M x)"): while it
+           // is up, $7E00A6-A9 = 00 02 30 05, $7E00AA = multiplier x1000 (16-bit),
+           // $7E00AD = Exp received (24-bit). Confirmed on SD2SNES 2026-09-30:
+           // 12015 @ 2756, 98280 @ 2808, 1702 @ 1000 (no bonus flags). Galeswift
+           // 4.7 writes the same signature and Exp but leaves junk (1280) in the
+           // multiplier slot, so this stays v5-only.
            xpPollCounter++;
-           if (xpPollCounter >= 5) {
+           if (module.objectiveGroupsV5 && xpPollCounter >= 5) {
              xpPollCounter = 0;
              module.network.snes.send(JSON.stringify({
                "Opcode" : "GetAddress",

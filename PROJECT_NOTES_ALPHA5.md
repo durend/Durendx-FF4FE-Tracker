@@ -2,7 +2,7 @@
 
 Working notes for FF4 Free Enterprise Alpha 5.0 support, forked from the released **Tracker v1.03.1** (untouched). Read this first when resuming work on this folder.
 
-## Status (2026-09-30 night): Objectives, checks (incl. Feymarch Chest + Lunar Ribbon special cases) and character recruits all CONFIRMED on real hardware (SD2SNES). XP multiplier now read live from the battle results screen ($7E00AA) and saved per seed - CONFIRMED. Committed to the GitHub repo on local branch `v1.04` (not pushed); main/v1.03.2 untouched. Before release: test a Galeswift 4.x seed live (XP read is now ungated for 4.x, unverified there) and a seed with no XP bonus flags.
+## Status (2026-09-30 night): Objectives, checks (incl. Feymarch Chest + Lunar Ribbon special cases) and character recruits all CONFIRMED on real hardware (SD2SNES). XP multiplier now read live from the battle results screen ($7E00AA) and saved per seed - CONFIRMED. Committed to the GitHub repo on local branch `v1.04` (not pushed); main/v1.03.2 untouched. Pre-release live tests DONE: no-XP-bonus 5.0 seed (reads 1x correctly) and Galeswift 4.7 seed (no multiplier in WRAM - live read is v5-only, Galeswift uses the formula). Remaining for release: version bump, README changelog, merge to main, tag, GitHub release.
 
 ## What this folder is
 - Copied from `..\Tracker v1.03` (2026-09-29), **excluding `.git`** (v1.03's git history/remote stays with v1.03; this folder is not currently its own git repo).
@@ -167,8 +167,22 @@ seeds: `$7E150F` bit 1 (bit 0 = White Spear altar, bit 2 = Masamune altar - thos
 bits). `tracking_interface.js` now feeds `$7E150F` bit 1 into slot 0x39 (v5-only, same pattern as Feymarch Chest).
 Unexplained: `$7E1527` bit 6 (slot 0x3E, not in ki_location_map) is set on the current hardware seed.
 
-## TODO: verify XP read on a seed with NO XP bonus flags
-Unknown whether the results screen still writes `00 02 30 05` + 1000 at `$7E00AA` when there's no multiplier.
-If it doesn't, the tracker falls back to the formula (1x, or 2x at 10 key items unless Xnokeybonus).
-Also: readings < 1000 are rejected - if any flag can push XP below 1x, revisit. Test with `wram_snap.py`-style
-full snapshot during one fight on such a seed.
+## DONE: XP read on a seed with NO XP bonus flags (2026-09-30, CONFIRMED on SD2SNES)
+Base 5.0 seed, no X bonus flags: results screen still writes `00 02 30 05`, multiplier 1000 (`E8 03`), Exp 1702
+(matched screen). Stayed in WRAM ~23s. Tracker shows 1x. Still open: readings < 1000 are rejected - revisit only if
+some flag can push XP below 1x.
+
+## Galeswift 4.7 XP read (2026-09-30, CONFIRMED on SD2SNES) - NOT supported, read is v5-only again
+Galeswift results screen shows no multiplier. WRAM still gets the `00 02 30 05` signature and Exp at `$7E00AD`
+(4360, matched screen) but `$7E00AA` holds leftover junk (`00 05` = 1280), which the ungated read showed as 1.28x.
+Fix: read gated back to `module.objectiveGroupsV5`; persistence.js restores `xpLastLive` only for 5.x seed IDs;
+"Estimate until the first battle" tooltip only on v5. Galeswift = formula only.
+
+## TODO (next: v1.04.1) - Galeswift XP estimate undercounts Xkicheckbonus/Xzonkbonus (pre-existing since v1.03)
+Captured 2026-10-01 at 233 reads/sec (scratchpad `exp_logger.py`, polls `$7E00A6` with no delay): Galeswift applies
+bonuses one at a time to `$7E00AD` within ~30ms: 8420 -> 9262 (x1.10) -> 10558 (x1.14) -> 11612 -> 11613 (x1.10).
+Flags: Xobjectivebonus:5/kicheckbonus:2/zonkbonus:5. Real ~1.379x, tracker showed 1.17x.
+Game state at that moment: 2 key items held, check slots 0x20-0x23 set, 2 objectives done, 7 character slots,
+`$7E1579`=07 (unknown stat next to Stats_Bosses, also 7). The x1.14 step = 7 x 2% -> kicheck count source unknown.
+Plan: read the exact bonus code in Galeswift's public source, then verify against a capture like the above.
+Earlier "two-value" captures (1504->1610, 779->817) were single steps mid-sequence, not base->final.

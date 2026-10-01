@@ -81,7 +81,8 @@ var TrackerSave = (function () {
     if (typeof s.ignorewarp === 'boolean') ignorewarp = s.ignorewarp;
     if (typeof s.cecil === 'boolean') cecil = s.cecil;
     if (typeof s.rydia === 'boolean') rydia = s.rydia;
-    if (typeof s.xpLastLive === 'number') {
+    // Live XP is only read on Alpha 5.0 seeds (seedId = "version:seed")
+    if (typeof s.xpLastLive === 'number' && seedId && isAlpha5Version(seedId.split(':')[0])) {
       xpLastLive = s.xpLastLive;
       updateXPModifier();
     }

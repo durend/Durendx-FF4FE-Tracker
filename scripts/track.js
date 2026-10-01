@@ -3231,7 +3231,8 @@ function updateXPModifier(itemcount) {
 	} else {
 		var r = computeXPModifier(itemcount);
 		multiplier = r.multiplier;
-		parts = r.parts.concat(['Estimate until the first battle']);
+		parts = r.parts;
+		if (typeof ti !== 'undefined' && ti.objectiveGroupsV5) parts.push('Estimate until the first battle');
 	}
 
 	// The game truncates its display (2.808 shows as 2.80)

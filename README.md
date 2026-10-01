@@ -8,7 +8,7 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
 
 ### Core Functionality
 - **Manual Tracking**: Click-to-track interface for all tracker elements
-- **Auto-Tracking**: Real-time memory reading via USB2SNES/QUsb2Snes protocol
+- **Auto-Tracking**: Real-time memory reading via [SNI](https://github.com/alttpo/sni) (recommended) or QUsb2Snes
 - **Dual Layout Modes**: Switch between horizontal and vertical layouts
 - **Comprehensive Flag Support**: Full support for FF4FE flags including Knofree variants, Cnoearned, and more
 
@@ -28,6 +28,12 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
 - Seed Notes for Ctreasure, Kstart, gated/hard-required objectives and shop flags
 - Tested against Galeswift v4.7.0
 
+### Free Enterprise Alpha 5.0 Support
+- Seeds from [alpha.ff4fe.com](https://alpha.ff4fe.com) (`v5.0.0-a.x`) are detected automatically from the ROM
+- Objective groups with their rewards, auto-tracked
+- Key item checks, character recruits and objectives auto-tracked (tested on SD2SNES hardware)
+- Exact XP multiplier, read live from the game after each battle
+
 ## Quick Start
 
 ### Manual Tracking
@@ -40,43 +46,69 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
 
 ### Auto-Tracking Setup
 
+The tracker reads the game's memory through a bridge program. **SNI is recommended**
+(it's what v1.04 was tested with, on both BizHawk and SD2SNES hardware). QUsb2Snes
+still works too - the tracker speaks the same protocol to both.
+
 #### Required Software
-- [QUsb2Snes](https://github.com/Skarsnik/QUsb2snes/releases) - Bridge software for memory reading
+- [SNI](https://github.com/alttpo/sni) (recommended) - download from [SNI Releases](https://github.com/alttpo/sni/releases)
+- *or* [QUsb2Snes](https://github.com/Skarsnik/QUsb2snes/releases)
+
+Run only one of them at a time - they fight over the same port and device.
 
 #### Supported Emulators
-- **BizHawk** (with Lua bridge)
-- **RetroArch** (with network commands enabled)
+- **BizHawk** (with the [Emulator Network Access tool](https://github.com/Skarsnik/Bizhawk-nwa-tool/releases), or SNI's Lua bridge)
+- **RetroArch** (with network commands enabled, bsnes-mercury core recommended)
 - **Snes9x-rr** (with Lua support)
 - **snes9x-emunwa** (built-in support)
 
 #### Supported Hardware
-- **SD2SNES / FXPak Pro** with network support
+- **SD2SNES / FXPak Pro** connected by USB
 
 #### Setup Instructions
 
-##### Windows
+##### Windows (SNI - recommended)
 
-1. **Install QUsb2Snes**
-   - Download from [GitHub Releases](https://github.com/Skarsnik/QUsb2snes/releases)
-   - Run QUsb2Snes - it will start a WebSocket server on port 8080
+1. **Get SNI**
+   - Download the Windows zip from [SNI Releases](https://github.com/alttpo/sni/releases)
+   - Extract it into the tracker's `SNI` folder, so `sni.exe` sits next to `start_sni.bat`
 
-2. **Configure Your Emulator**
-   - **BizHawk**: Install [Emulator Network Access plugin](https://github.com/Skarsnik/Bizhawk-nwa-tool/releases) to `ExternalTools` folder, then enable via `Tools→External Tools` menu
-   - **RetroArch**: Enable network commands in settings
-   - **snes9x-emunwa**: No configuration needed
+2. **Start SNI with the included batch file**
+   - Double-click `SNI\start_sni.bat`
+   - SNI starts as an icon in the system tray (bottom-right, near the clock - check the `^` overflow arrow)
+   - Why the batch file: SNI normally listens on port `23074`, but the tracker defaults to `8080`
+     (the QUsb2Snes port). The batch file tells SNI to listen on **both**, so the launcher works
+     without changing anything
+   - If `sni.exe` isn't found, the batch file tells you where to put it
+   - Prefer not to use the batch file? Run `sni.exe` directly and set the launcher's port to `23074`
 
-3. **Start the Tracker**
+3. **Connect Your Game**
+   - **SD2SNES / FXPak Pro**: plug it in by USB and power on - SNI finds it on its own
+   - **BizHawk**: install the [Emulator Network Access tool](https://github.com/Skarsnik/Bizhawk-nwa-tool/releases)
+     into BizHawk's `ExternalTools` folder, then open it via `Tools -> External Tools`
+   - **RetroArch**: enable network commands in settings
+   - **snes9x-emunwa**: no configuration needed
+
+4. **Start the Tracker**
    - Open `launcher.html`
    - Enter your flag string
    - Check "Enable Auto-Tracking"
-   - Set port to `8080` (default)
+   - Leave port at `8080` (or `23074` if you started `sni.exe` without the batch file)
    - Click "Launch Tracker"
 
-4. **Load Your ROM**
-   - Start your FF4 Free Enterprise ROM in the emulator
-   - The tracker will automatically connect and sync
+5. **Load Your ROM**
+   - Start your FF4 Free Enterprise ROM
+   - The tracker connects, reads the seed from the ROM and starts syncing
+
+##### Windows (QUsb2Snes)
+
+1. Download and run [QUsb2Snes](https://github.com/Skarsnik/QUsb2snes/releases) - it starts a WebSocket server on port 8080
+2. Connect your emulator or hardware as in step 3 above
+3. Launch the tracker with port `8080`
 
 ##### Linux
+
+> SNI also has Linux builds on its [releases page](https://github.com/alttpo/sni/releases). Run `sni` and set the launcher's port to `23074` (its default), or start it with `SNI_USB2SNES_LISTEN_ADDRS=0.0.0.0:23074,0.0.0.0:8080` to keep port `8080`. The QUsb2Snes steps below still work as well.
 
 1. **Install QUsb2Snes**
    - **Arch Linux**: Install from AUR: `yay -S qusb2snes` or `paru -S qusb2snes`
@@ -121,7 +153,7 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
 
 ## Technical Details
 
-- **Protocol**: WebSocket communication via USB2SNES protocol
+- **Protocol**: WebSocket communication via the usb2snes protocol (SNI or QUsb2Snes)
 - **Polling Rate**: 100ms memory read interval
 - **Memory Addresses**: Reads SNES WRAM at `0x7E0000-0x7FFFFF`
 - **Protection Logic**: Smart filtering prevents data loss during save browsing
@@ -192,6 +224,44 @@ Comprehensive support for FF4FE flags including:
 ## Changes (v1.02)
 
 - Added boss name tooltips - hover over any boss icon to see its full name
+
+## Changes (v1.04)
+
+**Free Enterprise Alpha 5.0 support** (seeds from alpha.ff4fe.com, `v5.0.0-a.x`).
+The tracker reads the ROM's version and switches automatically - 4.6.X and
+Galeswift 4.7.0 seeds work exactly as before.
+
+- Alpha 5.0 objective groups, including group-to-group requirements and
+  rewards, shown grouped in the Objectives panel
+- Auto-tracking of Alpha 5.0 objectives (including counted ones like Dark
+  Matter and key item hunts), key item checks and character recruits -
+  tested live on SD2SNES hardware and BizHawk
+- Includes the two checks Alpha 5.0 records differently (Feymarch Chest and
+  the Lunar Ribbon altar)
+
+**Exact XP multiplier on Alpha 5.0**
+- The XP display now shows the game's own multiplier, read after each battle
+  (the "Received N Exp. (M x)" value), instead of estimating it from flags.
+  It's remembered for the seed when you refresh
+- Before your first battle, and always on Galeswift (which doesn't store the
+  multiplier), the flag-based estimate is shown. Hover the XP display to see
+  which one you're looking at
+- The display now truncates like the game does (2.808 shows as 2.8x, not 2.81x)
+- Flag estimate: added Alpha 5.0's `Xobjbonus:N` name and the `Xmaxmulti:N` cap
+
+**SNI support**
+- SNI is now the recommended bridge (QUsb2Snes still works). The release
+  includes `SNI\start_sni.bat`, which starts SNI on the tracker's default port
+  - see Auto-Tracking Setup above
+
+**Known limitations**
+- Alpha 5.0 is itself still in alpha; a future alpha could change how it
+  stores things in memory
+- `Xbonuses:mul` (multiplicative bonus mode) isn't used by the flag estimate
+- On Galeswift seeds the XP display is still an estimate, and it can read low
+  when `Xkicheckbonus` / `Xzonkbonus` are on (the game counts these
+  differently than the tracker does). This has been the case since v1.03 and
+  is planned for a follow-up fix
 
 ## Changes (v1.03.2)
 
@@ -319,9 +389,12 @@ For issues, questions, or feature requests:
 
 - **FF4 Free Enterprise**: [https://ff4fe.com/](https://ff4fe.com/)
 - **Galeswift Fork**: Enhanced FE version with additional features
+- **Tracker Repository**: [https://github.com/durend/Durendx-FF4FE-Tracker](https://github.com/durend/Durendx-FF4FE-Tracker)
+- **SNI**: [https://github.com/alttpo/sni](https://github.com/alttpo/sni)
 - **QUsb2Snes**: [https://github.com/Skarsnik/QUsb2snes](https://github.com/Skarsnik/QUsb2snes)
+- **FF4 Free Enterprise Alpha 5.0**: [https://alpha.ff4fe.com/](https://alpha.ff4fe.com/)
 
 ---
 
-**Version**: 1.03.2
+**Version**: 1.04
 **Last Updated**: September 2026
