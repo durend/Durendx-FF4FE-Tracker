@@ -18,7 +18,6 @@ A comprehensive tracker for Final Fantasy IV Free Enterprise randomizer with ful
 - **Objectives** (100+ objectives): Quest, boss, and character objectives
 - **Locations**: Key item locations, character locations, and town checks
 - **Current Party**: Live party display with character forms (Cecil DK/Paladin, Rydia Kid/Adult)
-- **Trapped Chests**: Track dangerous chest locations
 
 ### Galeswift Fork Support
 - Boss Collector objectives
