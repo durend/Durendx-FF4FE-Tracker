@@ -44,7 +44,8 @@ var TrackerSave = (function () {
       cecil: cecil,
       rydia: rydia,
       partySlots: window.trackerPartySlots.slice(),
-      partyForms: window.trackerPartyForms.slice()
+      partyForms: window.trackerPartyForms.slice(),
+      xpLastLive: xpLastLive
     };
   }
 
@@ -80,6 +81,10 @@ var TrackerSave = (function () {
     if (typeof s.ignorewarp === 'boolean') ignorewarp = s.ignorewarp;
     if (typeof s.cecil === 'boolean') cecil = s.cecil;
     if (typeof s.rydia === 'boolean') rydia = s.rydia;
+    if (typeof s.xpLastLive === 'number') {
+      xpLastLive = s.xpLastLive;
+      updateXPModifier();
+    }
 
     // Bosses through setBossDefeated so the icons and the Mist Dragon flag follow
     if (Array.isArray(s.bosses)) {

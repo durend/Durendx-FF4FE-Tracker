@@ -2,8 +2,14 @@
 
 Working notes for the FF4 Free Enterprise tracker, v1.03 (**released 2026-09-29**). Read this first when resuming work on this folder.
 
-## Status (2026-09-29): RELEASED
-- **2026-09-30 patch (uncommitted):** fixed a pre-existing dead-code bug in `updateXPModifier()` (`scripts/track.js`) - `Xzonkbonus:N` (a real Galeswift flag, `experience_acceleration.f4c`) was parsed into `modeflags.xzonkbonus` but never actually applied to the multiplier. Found while working on Alpha 5.0 support in `Tracker v1.04 Alpha5` (a copy of this release) and ported back here since it's a genuine Galeswift-affecting bug, not Alpha-5-specific. Verified via a synthetic test (`+5% per zonk` now shows and computes correctly) and the full `romtest.py` regression suite (clean). Also fixed `..\Kyuuden inspired tracker\tests\xptest.py`'s own pre-existing assertion bug (comparing `"XP:1x"` against a stale `"XP x1"` format) while in there - all 10 cases now correctly report `ok` on both this tracker and `Tracker v1.04 Alpha5` (shared test file). Not yet committed/pushed.
+## Status (2026-09-30): RELEASED
+- **v1.03.2 hotfix published** (main @ aa2b513, tag v1.03.2, https://github.com/durend/Durendx-FF4FE-Tracker/releases/tag/v1.03.2): fixed four pre-existing, version-independent dead-code/logic bugs, all found while building separate Alpha 5.0 support in `Tracker v1.04 Alpha5` (a copy of this release) and ported back here:
+  - `Xzonkbonus:N` parsed but never applied in `updateXPModifier()` - dead code
+  - `-Pushbtojump` (an April Fools joke mode, confirmed via the live generator's own description to not affect item placement) mistakenly used as a bypass on ~12 separate prerequisite gates in `ApplyChecks()` - e.g. Tower of Zot/Baron Castle/Magnes Cave could show available with no prerequisite key item
+  - `Ksummon`/`Kmoon`-gated locations (Baron Odin, Fey Asura/Leviathan, Sylph Cave, Bahamut, all 5 Lunar spots) permanently force-hidden on any seed without those flags (most seeds), silently blocking the tracker's own correct unlock logic for the rest of the session
+  - `Cnogiant` parsed but never applied - Giant of Bab-il's character spot showed as available regardless
+  - Also fixed `..\Kyuuden inspired tracker\tests\xptest.py`'s own pre-existing assertion-format bug (`"XP:1x"` vs a stale `"XP x1"`) while in there
+  - Full regression suite clean: romtest, kitest, chartest, xptest, harness (69 presets), launchtest, partytest, bosstest, persisttest
 - **v1.03.1 hotfix published** (main @ 753814d, tag v1.03.1): usb2snes.js send() now queues requests and reassembles chunked GetAddress replies. This fixed missed bosses (Dwarf Castle) and the main hardware flicker cause. Tests: usbtest.py, e2etest.py
 - **v1.03 is published**: https://github.com/durend/Durendx-FF4FE-Tracker/releases/tag/v1.03 (tag `v1.03`, `main` @ 1c1149f, asset `Durendx-FF4FE-Tracker-v1.03.zip`)
 - Tested live on BizHawk and on real hardware (FXPak/SD2SNES) by the user; all headless suites pass (tests live in `..\Kyuuden inspired tracker\tests\`: harness, romtest, launchtest, chartest, kitest, partytest, bosstest, persisttest, xptest, usbtest, e2etest; pass the tracker folder path as arg 1)

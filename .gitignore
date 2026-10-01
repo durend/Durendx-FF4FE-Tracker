@@ -17,3 +17,7 @@ npm-debug.log*
 # Temporary files
 *.tmp
 *.bak
+
+# ROMs
+*.sfc
+*.smc

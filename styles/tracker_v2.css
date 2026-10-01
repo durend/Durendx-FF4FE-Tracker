@@ -243,6 +243,32 @@ body {
 	text-align: center;
 }
 
+/* Alpha 5.0 objective groups (Group A/B/C/... within the OBJECTIVES panel) */
+.objective-group-header {
+	font-size: 10px;
+	font-weight: bold;
+	color: #4A90E2;
+	text-transform: uppercase;
+	margin: 6px 0 2px 2px;
+	letter-spacing: 0.5px;
+}
+
+.objective-group-header:first-child {
+	margin-top: 0;
+}
+
+.objective-group-reward {
+	font-size: 11px;
+	color: #AAB8C2;
+	padding: 1px 4px 4px 4px;
+	font-style: italic;
+}
+
+.objective-group-reward.reward-met {
+	color: #7CD992;
+	font-style: normal;
+}
+
 /* LOCATIONS LIST */
 .locations-list {
 	display: flex;

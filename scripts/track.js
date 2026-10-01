@@ -176,7 +176,8 @@ var modeflags = {
 	xcrystalbonus: false,
 	xobjbonus: '',
 	xkicheckbonus: '',
-	xzonkbonus: ''
+	xzonkbonus: '',
+	xmaxmulti: ''
 }
 
 // Pristine copies of the flag-derived state, restored at the start of every
@@ -1312,9 +1313,15 @@ function SetModes(overrideFlags) {
 					else if (xkey === 'NOBOOST') modeflags.oexpnoboost = true;
 					else if (xkey === 'NOKEYBONUS') modeflags.oexpnokeybonus = true;
 					else if (xkey === 'CRYSTALBONUS') modeflags.xcrystalbonus = true;
+					// Alpha 5.0 shortened Xobjectivebonus: to Xobjbonus: (confirmed against
+					// the live generator's uispec.js) - accept both so Galeswift seeds
+					// (long form, see galeswift/FreeEnt/flagspec.txt) keep working.
 					else if (xkey.startsWith('OBJECTIVEBONUS:')) modeflags.xobjbonus = xkey.substring(15).toLowerCase();
+					else if (xkey.startsWith('OBJBONUS:')) modeflags.xobjbonus = xkey.substring(9).toLowerCase();
 					else if (xkey.startsWith('KICHECKBONUS:')) modeflags.xkicheckbonus = xkey.substring(13).toLowerCase();
 					else if (xkey.startsWith('ZONKBONUS:')) modeflags.xzonkbonus = xkey.substring(10);
+					// Alpha 5.0 only: caps the final multiplier, e.g. Xmaxmulti:400 = 4.0x max.
+					else if (xkey.startsWith('MAXMULTI:')) modeflags.xmaxmulti = xkey.substring(9);
 				}
 			}
 
@@ -1394,11 +1401,11 @@ function SetModes(overrideFlags) {
 						// gates throughout ApplyChecks(), showing e.g. Tower of Zot, Baron
 						// Castle and Magnes Cave as available with no Earth Crystal/Baron
 						// Key/TwinHarp in inventory. But per the live generator's own
-						// description, -Pushbtojump is an April Fools joke mode ("Push B to
-						// Jump") that explicitly "does not affect the randomized placement
-						// of progression items" - it has nothing to do with skipping any
-						// prerequisite. Still parsed (in case something cosmetic wants it
-						// later) but no longer used to gate anything.
+						// description (uispec.js), -Pushbtojump is an April Fools joke mode
+						// ("Push B to Jump") that explicitly "does not affect the randomized
+						// placement of progression items" - it has nothing to do with
+						// skipping any prerequisite. Still parsed (in case something cosmetic
+						// wants it later) but no longer used to gate anything.
 						modeflags.opushbtojump = true;
 						break;
 					default:
@@ -1480,18 +1487,21 @@ function SetModes(overrideFlags) {
 }
 
 // Helper function to set summon/moon location states based on flags
-// BUG FIXED (2026-09-30): this used to force BARON_ODIN/FEY_ASURA/
-// FEY_LEVIATHAN/SYLPH_CAVE/BAHAMUT and all 5 MOON_* locations to state 3
+//
+// BUG FIXED (2026-09-30): this used to force these locations to state 3
 // ("hidden") whenever Ksummon/Kmoon was absent from the flags. But
 // Ksummon/Kmoon only mean "key items CAN be placed as summon-boss/moon-boss
-// rewards" (confirmed against the real flagspec) - they say nothing about
-// whether the location itself is reachable. ApplyChecks() already has its
-// own, more specific gating for these exact locations (underworld access /
-// Darkness Crystal obtained), but ActivateKeyItemLocation() only ever
-// transitions state 0->1 - once this function forced state 3, ApplyChecks()'s
-// activation could never take effect again for the rest of the session, for
-// any seed that doesn't set Ksummon/Kmoon (most seeds, since it's just one
-// placement option among several). Fix: stop force-hiding here and let
+// rewards" (confirmed against the real Galeswift flagspec and the live
+// generator's uispec.js) - they say nothing about whether the location
+// itself is reachable. ApplyChecks() already has its own, more specific
+// gating for these exact locations (underworld access / Darkness Crystal
+// obtained), but ActivateKeyItemLocation() only ever transitions state 0->1
+// - once this function forced state 3, ApplyChecks()'s activation could
+// never take effect again for the rest of the session, for any seed that
+// doesn't set Ksummon/Kmoon (most seeds, since it's just one placement
+// option among several). Reproduced directly: obtaining the Darkness
+// Crystal correctly set keyitems[DARKNESS_CRYSTAL] but the Moon locations
+// stayed hidden regardless. Fix: stop force-hiding here and let
 // ApplyChecks() be the sole authority on these locations' visibility.
 function applyKSummonKMoonFlags() {
 }
@@ -2092,12 +2102,12 @@ function ApplyChecks(){
 		}
 
 		//Giant of Babil (earned - hidden by Cnoearned)
-		// Cnogiant ("No character at Giant" per the live generator): no
-		// character ever joins here for this seed - was parsed into
-		// modeflags.cnogiant but never actually checked anywhere (found
-		// 2026-09-30), so this location kept showing as available once the
-		// Darkness Crystal was obtained even on Cnogiant seeds. Fixed: treat
-		// it the same as an empty earned spot (force hidden).
+		// Cnogiant ("No character at Giant" per uispec.js): no character ever
+		// joins here for this seed - was parsed into modeflags.cnogiant but
+		// never actually checked anywhere (found 2026-09-30), so this location
+		// kept showing as available once the Darkness Crystal was obtained
+		// even on Cnogiant seeds. Fixed: treat it the same as an empty earned
+		// spot (force hidden).
 		if (earnedCharacterSpotsEmpty() || modeflags.cnogiant) {
 			if (characterlocations[CharacterCheck.GIANT_BABIL] !== 2) characterlocations[CharacterCheck.GIANT_BABIL] = 3;
 		} else {
@@ -3180,24 +3190,58 @@ function ClearWarpGlitch() {
 	ApplyChecks();
 }
 
-// XP modifier shown on the left of the KEY ITEMS header, based only on key
-// items gained and the seed's X flags (Galeswift experience_acceleration.f4c):
+// XP modifier shown on the left of the KEY ITEMS header, based on key items
+// gained, completed objectives and the seed's X flags:
 //   - 10+ key items: x2 (unless Xnokeybonus)
 //   - Xcrystalbonus: x2 more once the Crystal is obtained
 //   - Xkicheckbonus:N: +N% per key item gained after the starting item
-//   - Xobjectivebonus:N: +N% per completed objective (:num = 100% split across
-//     all of the seed's objectives)
-//   - Xzonkbonus:N: +N% per "zonk" - a key-item-check location that gave
-//     neither a key item nor a character. Approximated as (key-item-check
-//     locations cleared) - (key items in inventory), since the tracker
-//     doesn't separately track "check gave a character" from "gave nothing".
+//     (Galeswift experience_acceleration.f4c)
+//   - Xobjectivebonus:N / Xobjbonus:N (Alpha 5.0 shortened name, see
+//     uispec.js "@expobjectivebonus"): +N% per completed objective (:num =
+//     100% split across all of the seed's objectives)
+//   - Xzonkbonus:N (Alpha 5.0 only): +N% per "zonk" - a key-item-check
+//     location that gave neither a key item nor a character. Approximated as
+//     (key-item-check locations cleared) - (key items in inventory), since
+//     the tracker doesn't yet distinguish "check gave a character" from
+//     "check gave nothing" - can overcount zonks by 1 per character found in
+//     a key-item slot (a new Alpha 5.0 shuffle option), which should be rare.
+//   - Xmaxmulti:N (Alpha 5.0 only): caps the final multiplier at N/100.
 var objectivesCompletedCount = 0;
 var objectivesTotalCount = 0;
+// Real multiplier read off the post-battle results screen. Once seen, it is
+// shown as-is; the formula is only a fallback before the first battle.
+var xpLastLive = null;
+var lastXPItemcount;
+
+// mult1000 = multiplier x1000, as the game stores it at $7E00AA.
+function setLiveXPMultiplier(mult1000) {
+	xpLastLive = mult1000 / 1000;
+	updateXPModifier(lastXPItemcount);
+}
 
 function updateXPModifier(itemcount) {
 	var el = document.getElementById('xpmodifier');
 	if (!el) return;
+	lastXPItemcount = itemcount;
 
+	var multiplier, parts;
+	if (xpLastLive !== null) {
+		multiplier = xpLastLive;
+		parts = ['From the last battle (' + xpLastLive.toFixed(3) + 'x) - updates after each fight'];
+	} else {
+		var r = computeXPModifier(itemcount);
+		multiplier = r.multiplier;
+		parts = r.parts.concat(['Estimate until the first battle']);
+	}
+
+	// The game truncates its display (2.808 shows as 2.80)
+	var shown = Math.floor(multiplier * 100 + 1e-6) / 100;
+	el.textContent = 'XP:' + shown.toFixed(2).replace(/\.?0+$/, '') + 'x';
+	el.style.color = multiplier > 1 ? '#0F0' : '#FFF';
+	el.title = parts.length ? parts.join(' | ') : 'No key item XP bonus in this seed';
+}
+
+function computeXPModifier(itemcount) {
 	if (itemcount === undefined) {
 		itemcount = 0;
 		for (var i = 0; i < keyitems.length; i++) {
@@ -3248,9 +3292,13 @@ function updateXPModifier(itemcount) {
 		}
 	}
 
-	el.textContent = 'XP:' + multiplier.toFixed(2).replace(/\.?0+$/, '') + 'x';
-	el.style.color = multiplier > 1 ? '#0F0' : '#FFF';
-	el.title = parts.length ? parts.join(' | ') : 'No key item XP bonus in this seed';
+	var maxMulti = parseInt(modeflags.xmaxmulti);
+	if (maxMulti > 0 && multiplier > maxMulti / 100) {
+		multiplier = maxMulti / 100;
+		parts.push('capped at ' + (maxMulti / 100).toFixed(2).replace(/\.?0+$/, '') + 'x');
+	}
+
+	return { multiplier: multiplier, parts: parts };
 }
 
 function DMTicker(delta) {

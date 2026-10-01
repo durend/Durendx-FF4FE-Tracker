@@ -1,7 +1,7 @@
 <html>
 	<body bgcolor="#000063">
 		<head>
-			<title>FFIV Free Enterprise Tracker v1.03.2 - By Durendx</title>
+			<title>FFIV Free Enterprise Tracker v1.04 Alpha5 - By Durendx</title>
 			<link rel="stylesheet" href="./styles/stylesheet.css?v=2316">
 			<link rel="stylesheet" href="./styles/tracker_v2.css?v=2404">
 			<script src="./scripts/enums.js?v=2405"></script>
@@ -16,7 +16,7 @@
 			var disableobjectivetracker = '0';
 			var disablecharacterstracker = '0';  // Character locations tracker
 			</script>
-			<script src="./scripts/track.js?v=2406"></script>
+			<script src="./scripts/track.js?v=2407"></script>
 			<script type="text/javascript" src="./scripts/jquery-3.3.1.js"></script>
 			<script type="text/javascript" src="./scripts/jquery.powertip.js"></script>
 			<link rel="stylesheet" type="text/css" href="./styles/jquery.powertip.css" />
@@ -24,8 +24,9 @@
 			<script src="./scripts/network.js"></script>
 			<script src="./scripts/rom-metadata.js?v=2403"></script>
 			<script src="./scripts/objectives.js?v=2403"></script>
-			<script src="./scripts/tracking_interface.js?v=2409"></script>
-			<script src="./scripts/persistence.js?v=2408"></script>
+			<script src="./scripts/objectives-v5.js?v=1"></script>
+			<script src="./scripts/tracking_interface.js?v=2412"></script>
+			<script src="./scripts/persistence.js?v=2409"></script>
 
 			<script type="text/javascript">
 			let ti = new tracking_interface();
@@ -758,6 +759,56 @@
 						objectivesDiv.appendChild(objItem);
 						totalCount++;
 					}
+				} else if (ti && ti.objectiveGroupsV5 && ti.objectiveGroupsV5.length > 0 && ti.objectiveTasksV5) {
+					// Alpha 5.0: render per objective group (A/B/C/...) instead of one
+					// flat list. ti.objectiveTasksV5 is only populated once at parse
+					// time (see tracking_interface.js), so live completion is computed
+					// here from ti.objectiveProgress (index-aligned with ti.objectives
+					// via each task's polledIndex) rather than trusting stale fields.
+					let liveTasks = ti.objectiveTasksV5.map((t) => {
+						if (t.isComputed) return Object.assign({}, t);
+						let target = (ti.objectiveTargets && ti.objectiveTargets[t.polledIndex]) ? ti.objectiveTargets[t.polledIndex].target : 1;
+						let current = (ti.objectiveProgress && ti.objectiveProgress[t.polledIndex] !== undefined) ? ti.objectiveProgress[t.polledIndex] : 0;
+						return Object.assign({}, t, { current: current, isCompleted: current >= target });
+					});
+					if (typeof recomputeGroupRefs === 'function') recomputeGroupRefs(liveTasks);
+
+					for (let g = 0; g < ti.objectiveGroupsV5.length; g++) {
+						let group = ti.objectiveGroupsV5[g];
+						let header = document.createElement('div');
+						header.className = 'objective-group-header';
+						header.textContent = group.name || group.key;
+						objectivesDiv.appendChild(header);
+
+						let groupTasks = liveTasks.filter((t) => t.groupKey === group.key);
+						for (let t = 0; t < groupTasks.length; t++) {
+							let task = groupTasks[t];
+							let objItem = document.createElement('div');
+							objItem.className = 'objective-item';
+							objItem.textContent = task.description;
+							if (task.isCompleted) {
+								objItem.classList.add('completed');
+								if (!task.isComputed) completedCount++;
+							}
+							if (!task.isComputed) totalCount++;
+							objectivesDiv.appendChild(objItem);
+						}
+
+						// Reward thresholds count ALL of this group's own tasks, including
+						// a computed cross-group reference by its own (derived) completion
+						// state - e.g. Group B's "all" reward needs both its group-ref
+						// (Group A >= 4) AND quest_forge, not just the latter.
+						let groupDone = groupTasks.filter((t) => t.isCompleted).length;
+						for (let r = 0; r < (group.rewards || []).length; r++) {
+							let reward = group.rewards[r];
+							let need = reward.req === 'all' ? groupTasks.length : Number(reward.req);
+							let met = groupDone >= need;
+							let line = document.createElement('div');
+							line.className = 'objective-group-reward' + (met ? ' reward-met' : '');
+							line.textContent = (met ? '✓ ' : '') + reward.description + ' (' + groupDone + '/' + need + ')';
+							objectivesDiv.appendChild(line);
+						}
+					}
 				} else if (ti && ti.objectives && ti.objectives.length > 0) {
 					for (let i = 0; i < ti.objectives.length; i++) {
 					let objItem = document.createElement('div');
@@ -840,6 +891,15 @@
 
 						if (objectiveIndex !== -1) {
 							if (objectives[objectiveIndex + 4] === 1) {
+								isComplete = true;
+							}
+						} else {
+							// Not in the fixed v4.x objectivenames table (always true for
+							// Alpha 5.0's flag-based descriptions) - fall back to the
+							// live progress byte directly, same source bossMatch/goldMatch/
+							// dmMatch/kiMatch above already use.
+							let target = (ti.objectiveTargets && ti.objectiveTargets[i]) ? ti.objectiveTargets[i].target : 1;
+							if (liveProgress >= target) {
 								isComplete = true;
 							}
 						}

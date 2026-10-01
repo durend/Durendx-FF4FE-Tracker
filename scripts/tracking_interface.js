@@ -3,6 +3,7 @@ function tracking_interface() {
   let module = {};
   let partyUpdateCounter = 0; // Counter to throttle party updates
   let seedCheckCounter = 0; // Counter to throttle the seed re-check
+  let xpPollCounter = 0;
   let lastPartyState = ''; // Track previous party composition to detect changes
   const PARTY_STABLE_READS = 2; // consecutive identical reads needed before a party change is shown
   let pendingPartyState = null;
@@ -65,12 +66,73 @@ function tracking_interface() {
     return new Uint8Array(await event.data.arrayBuffer());
   }
 
+  // Alpha 5.0 (meta.version like "v5.0.0-a.3") embeds `objectives` as nested
+  // ObjectiveGroups instead of v4.x/Galeswift's flat description-string array
+  // - see objectives-v5.js for the real shape (ported from a live actively-
+  // maintained tracker's source, verified against a real dropped-in v5 ROM).
+  module.objectiveGroupsV5 = null; // raw {key,name,tasks,rewards}[] for a future richer UI
+  module.objectiveTasksV5 = null;  // full flattened list, including isComputed group-refs
+
+  // Objectives__Progress base offset (relative to $7E1500) for the current
+  // seed's polled-task array. v4.x/Galeswift: $7E1520 (rel 0x20), unchanged.
+  // Alpha 5.0: $7E1530 (rel 0x30) - confirmed 2026-09-29 by live-polling a
+  // real v5.0.0-a.3 seed (BizHawk + QUsb2Snes) while completing every polled
+  // task in a known order and watching which byte flipped: all 6 tasks in
+  // that seed (tradepan/kaipoinn/traderat/giant/monsterqueen/forge) landed
+  // at exactly base+polledIndex with base=0x30, 6-for-6, no exceptions.
+  // $7E1520-152F appears to be a separate group/reward-status block (e.g. a
+  // reward-granted flag was observed at rel 0x28) - not more polled tasks.
+  const OBJECTIVE_PROGRESS_BASE_V4 = 0x20;
+  const OBJECTIVE_PROGRESS_BASE_V5 = 0x30;
+  module.objectiveProgressBase = OBJECTIVE_PROGRESS_BASE_V4;
+
+  // GUESS, not yet confirmed live (2026-09-30): character-recruit bits
+  // ($7E1510-1512 for v4.x) and key-item-check bits ($7E1514-151B for v4.x)
+  // are both dead for Alpha 5.0 - live-watched all session, essentially no
+  // activity there. Objectives shifted by exactly +0x10 ($7E1520->$7E1530);
+  // this applies that SAME +0x10 shift here too ($7E1510->$7E1520,
+  // $7E1514->$7E1524), since $7E1520-152B is exactly the region that
+  // correlated with check completions all session (including "check gave
+  // nothing" cases), and a uniform +0x10 shift across every v4.x->v5 tracker
+  // region would explain that cleanly. Explicitly a guess to be tested live,
+  // not a confirmed formula like OBJECTIVE_PROGRESS_BASE_V5 - see
+  // PROJECT_NOTES.md "Checks: GUESS implemented" for how to verify/falsify it.
+  const CHAR_LOC_BASE_V4 = 0x10;
+  const CHAR_LOC_BASE_V5 = 0x20;
+  const CHECK_LOC_BASE_V4 = 0x14;
+  const CHECK_LOC_BASE_V5 = 0x24;
+  module.charLocBase = CHAR_LOC_BASE_V4;
+  module.checkLocBase = CHECK_LOC_BASE_V4;
+
   async function get_objectives_from_metadata() {
     try {
       const meta = await readRomMetadata({ readRom: readRomViaLegacyClient });
       console.log('ROM metadata loaded: version', meta.version, meta.objectives ? `- ${meta.objectives.length} objectives` : '- no objectives array');
-      module.objectives = meta.objectives;
-      module.objectiveTargets = (meta.objectives || []).map(parseObjectiveTarget);
+
+      if (meta.objectives && isAlpha5Version(meta.version)) {
+        const built = buildObjectiveTasksV5(meta.objectives);
+        module.objectiveGroupsV5 = built.groups;
+        module.objectiveTasksV5 = built.tasks;
+        // Only polled (non-computed) tasks go into the flat module.objectives
+        // contract the rest of the tracker already knows how to render and
+        // poll a WRAM progress byte per index for - a {group,req} cross-group
+        // reference has no byte of its own (see objectives-v5.js).
+        const polled = built.tasks.filter((t) => !t.isComputed);
+        module.objectives = polled.map((t) => t.description);
+        module.objectiveTargets = polled.map((t) => ({ type: t.type, target: t.target }));
+        module.objectiveProgressBase = OBJECTIVE_PROGRESS_BASE_V5;
+        module.charLocBase = CHAR_LOC_BASE_V5;
+        module.checkLocBase = CHECK_LOC_BASE_V5;
+      } else {
+        module.objectiveGroupsV5 = null;
+        module.objectiveTasksV5 = null;
+        module.objectives = meta.objectives;
+        module.objectiveTargets = (meta.objectives || []).map(parseObjectiveTarget);
+        module.objectiveProgressBase = OBJECTIVE_PROGRESS_BASE_V4;
+        module.charLocBase = CHAR_LOC_BASE_V4;
+        module.checkLocBase = CHECK_LOC_BASE_V4;
+      }
+
       module.flags = meta.flags; // rom-metadata.js already uppercases and nulls out "(hidden)"
       module.seed = meta.seed; // identifies this seed (per-seed saved tracker state)
       module.seed_loaded(meta.seed, meta.version);
@@ -179,12 +241,14 @@ function tracking_interface() {
                set_used_ki(index, truth);
              }
            }
-           // Read character location flags (slots 0x03-0x14 = bytes 0x10-0x12)
+           // Read character location flags (slots 0x03-0x14 = 3 bytes starting
+           // at charLocBase - $7E1510 for v4.x, $7E1520 GUESS for v5)
            // Track changes for debugging
+           const charLocBase = module.charLocBase;
            let charState = [];
-           for (let i = 0x10; i <= 0x12; i++) {
+           for (let i = charLocBase; i <= charLocBase + 2; i++) {
              for (let b = 0; b < 8; b++) {
-               let index = (i * 8 + b) - 0x10*8;
+               let index = (i * 8 + b) - charLocBase*8;
                if (index > 0x14) continue;
                if (!!(memory[i] & (1 << b))) {
                  charState.push(`0x${index.toString(16).toUpperCase().padStart(2, '0')}`);
@@ -203,9 +267,9 @@ function tracking_interface() {
            // states 10 times a second); tracker.html decides what a change
            // means for the seed's C flags
            if (!module._charLocBits) module._charLocBits = {};
-           for (let i = 0x10; i <= 0x12; i++) {
+           for (let i = charLocBase; i <= charLocBase + 2; i++) {
              for (let b = 0; b < 8; b++) {
-               let index = (i * 8 + b) - 0x10*8;
+               let index = (i * 8 + b) - charLocBase*8;
                if (index > 0x14) continue;  // Character slots go up to 0x14
                let truth = !!(memory[i] & (1 << b));
                if (module._charLocBits[index] !== truth) {
@@ -214,12 +278,14 @@ function tracking_interface() {
                }
              }
            }
-           // Read key item location flags (slots 0x20-0x5D = bytes 0x14-0x1B)
+           // Read key item location flags (slots 0x20-0x5D = 8 bytes starting
+           // at checkLocBase - $7E1514 for v4.x, $7E1524 GUESS for v5)
            // Track changes for debugging
+           const checkLocBase = module.checkLocBase;
            let locState = [];
-           for (let i = 0x14; i <= 0x1B; i++) {
+           for (let i = checkLocBase; i <= checkLocBase + 7; i++) {
              for (let b = 0; b < 8; b++) {
-               let index = (i * 8 + b) - 0x14*8;
+               let index = (i * 8 + b) - checkLocBase*8;
                if (index > 0x5D) continue;
                if (!!(memory[i] & (1 << b))) {
                  locState.push(`0x${(index + 0x20).toString(16).toUpperCase()}`);
@@ -236,14 +302,51 @@ function tracking_interface() {
            // Report each key item check slot only when its bit changes (same
            // reasoning as the character slots above)
            if (!module._kiLocBits) module._kiLocBits = {};
-           for (let i = 0x14; i <= 0x1B; i++) {
+           for (let i = checkLocBase; i <= checkLocBase + 7; i++) {
              for (let b = 0; b < 8; b++) {
-               let slot = (i * 8 + b) - 0x14*8 + 0x20;
+               let slot = (i * 8 + b) - checkLocBase*8 + 0x20;
                let truth = !!(memory[i] & (1 << b));
                if (module._kiLocBits[slot] !== truth) {
                  module._kiLocBits[slot] = truth;
                  set_loc_ki(slot, truth);
                }
+             }
+           }
+
+           // GUESS, not confirmed (2026-09-30): Feymarch Chest (ki_location_map
+           // slot 0x2D) was the one check that never auto-cleared on v5, even
+           // after the +0x10 base shift fixed every other check. Re-examined
+           // the original live log from that exact pickup: nothing in the
+           // normal check range (checkLocBase..+7) changed at the time, but
+           // $7E1518 bit 5 flipped ~10s later - matching the known "write
+           // lands after the dialogue box closes" delay seen all session. That
+           // byte is outside the range the loop above reads at all, so even if
+           // this is the real signal, it was never being polled. Wiring it in
+           // directly as an alternate source for slot 0x2D specifically, since
+           // only this one location was ever reported broken - not widening
+           // the whole loop on a single data point.
+           //
+           // v5-only: $7E1518 falls INSIDE v4.x's own check range (0x14-0x1B),
+           // so the main loop above already reads it there under v4.x's own
+           // formula - adding this unconditionally would double-fire slot 0x2D
+           // with an unrelated v4.x bit's value.
+           if (module.objectiveGroupsV5) {
+             if (!module._feyChestBit) module._feyChestBit = false;
+             let feyChestBit = !!(memory[0x18] & 0x20);
+             if (module._feyChestBit !== feyChestBit) {
+               module._feyChestBit = feyChestBit;
+               set_loc_ki(0x2D, feyChestBit);
+             }
+
+             // Lunar Ribbon altar never sets its check slot (0x39/0x3A =
+             // $7E1527 bits 1-2) on v5. The only change at that altar, seen on
+             // two seeds (2026-09-30), is $7E150F bit 1 (bits 0/2 track the
+             // White Spear/Masamune altars).
+             if (!module._ribbonBit) module._ribbonBit = false;
+             let ribbonBit = !!(memory[0x0F] & 0x02);
+             if (module._ribbonBit !== ribbonBit) {
+               module._ribbonBit = ribbonBit;
+               set_loc_ki(0x39, ribbonBit);
              }
            }
            if (module.objectives) {
@@ -256,10 +359,11 @@ function tracking_interface() {
              // been marked complete the instant progress ticked off zero.
              // Targets are parsed once from the description text in
              // get_objectives_from_metadata() (see objectives.js).
+             const progressBase = module.objectiveProgressBase;
              let objState = [];
              for (let i=0; i < module.objectives.length; i++) {
                let target = (module.objectiveTargets && module.objectiveTargets[i]) ? module.objectiveTargets[i].target : 1;
-               if (memory[0x20 + i] >= target) {
+               if (memory[progressBase + i] >= target) {
                  objState.push(module.objectives[i]);
                }
              }
@@ -273,11 +377,11 @@ function tracking_interface() {
              // Raw per-objective progress bytes, exposed for UI progress
              // counters (Gold Hunter/Dark Matter/Boss Collector all need
              // "current/target" display, not just a pass/fail boolean).
-             module.objectiveProgress = Array.from(memory.slice(0x20, 0x20 + module.objectives.length));
+             module.objectiveProgress = Array.from(memory.slice(progressBase, progressBase + module.objectives.length));
 
              for (let i=0; i < module.objectives.length; i++) {
                let target = (module.objectiveTargets && module.objectiveTargets[i]) ? module.objectiveTargets[i].target : 1;
-               module.set_objective(module.objectives[i], memory[0x20 + i] >= target);
+               module.set_objective(module.objectives[i], memory[progressBase + i] >= target);
              }
            }
            // Read boss count from Stats_Bosses at offset 0x7C
@@ -307,6 +411,36 @@ function tracking_interface() {
                ).catch(() => {});
              }
              module._lastBossCount = bossCount;
+           }
+
+           // Battle results screen ("Received N Exp. (M x)"): while it is up,
+           // $7E00A6-A9 = 00 02 30 05, $7E00AA = multiplier x1000 (16-bit),
+           // $7E00AD = Exp received (24-bit). Confirmed on Alpha 5.0 / SD2SNES
+           // 2026-09-30: 12015 @ 2756 and 98280 @ 2808. Scratch memory, gone ~6s
+           // later. Unverified on 4.x - without the signature the formula is kept.
+           xpPollCounter++;
+           if (xpPollCounter >= 5) {
+             xpPollCounter = 0;
+             module.network.snes.send(JSON.stringify({
+               "Opcode" : "GetAddress",
+               "Space" : "SNES",
+               "Operands": ["0xF500A6", "A"]
+             })).then(
+               (ev) => ev.data.arrayBuffer()
+             ).then(
+               (buf) => {
+                 let r = new Uint8Array(buf);
+                 if (r.length < 10 || r[0] !== 0x00 || r[1] !== 0x02 || r[2] !== 0x30 || r[3] !== 0x05) return;
+                 let mult = r[4] | (r[5] << 8);
+                 let exp = r[7] | (r[8] << 8) | (r[9] << 16);
+                 if (mult < 1000 || mult > 50000 || exp === 0) return;
+                 if (mult === module._lastLiveXP && exp === module._lastLiveExp) return;
+                 module._lastLiveXP = mult;
+                 module._lastLiveExp = exp;
+                 console.warn(`⭐ BATTLE XP: ${exp} Exp at ${(mult / 1000).toFixed(3)}x`);
+                 if (typeof setLiveXPMultiplier === 'function') setLiveXPMultiplier(mult);
+               }
+             ).catch(() => {});
            }
 
            // Only read party member data every 10 cycles (once per second) to avoid spam
