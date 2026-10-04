@@ -1,7 +1,7 @@
 <html>
 	<body bgcolor="#000063">
 		<head>
-			<title>FFIV Free Enterprise Tracker v1.04.1 - By Durendx</title>
+			<title>FFIV Free Enterprise Tracker v1.04.2 - By Durendx</title>
 			<link rel="stylesheet" href="./styles/stylesheet.css?v=2316">
 			<link rel="stylesheet" href="./styles/tracker_v2.css?v=2404">
 			<script src="./scripts/enums.js?v=2406"></script>
@@ -16,7 +16,7 @@
 			var disableobjectivetracker = '0';
 			var disablecharacterstracker = '0';  // Character locations tracker
 			</script>
-			<script src="./scripts/track.js?v=2411"></script>
+			<script src="./scripts/track.js?v=2412"></script>
 			<script type="text/javascript" src="./scripts/jquery-3.3.1.js"></script>
 			<script type="text/javascript" src="./scripts/jquery.powertip.js"></script>
 			<link rel="stylesheet" type="text/css" href="./styles/jquery.powertip.css" />
@@ -304,6 +304,10 @@
 			// Update tracker party display
 			function updateTrackerPartyDisplay(slotIndex) {
 				if (slotIndex < 0 || slotIndex >= 5) return;
+				// Xsmallparty: XP bonus depends on empty party slots
+				if (typeof modeflags !== 'undefined' && modeflags.xsmallparty && typeof updateXPModifier === 'function') {
+					updateXPModifier(lastXPItemcount);
+				}
 
 				let partyElement = document.getElementById('party' + slotIndex);
 				let charId = window.trackerPartySlots[slotIndex];
@@ -447,6 +451,11 @@
 
 			// Format objective names from flag format to display format
 			function formatObjectiveName(name) {
+				// Prefer the game's own wording (track.js GALESWIFT_OBJECTIVE_TEXT)
+				if (typeof galeswiftObjectiveText === 'function') {
+					const gameText = galeswiftObjectiveText(name);
+					if (gameText) return gameText;
+				}
 				// Handle different objective types
 				if (name.startsWith('boss_')) {
 					// boss_golbez -> Defeat Golbez
@@ -513,6 +522,15 @@
 				if (modeflags.kstart && modeflags.kstart.length > 0) {
 					let names = modeflags.kstart.map(k => k.charAt(0).toUpperCase() + k.slice(1));
 					notes.push('Starting key item(s): ' + names.join(', '));
+				}
+
+				if (modeflags.startunderground) {
+					notes.push('Starting underground: the Hook item is the Drill (needed to reach the surface); the Enterprise comes from Baron Castle');
+				} else if (modeflags.startblackchocobo) {
+					notes.push('Black Chocobo start: no Enterprise until Baron Castle is completed');
+				}
+				if (modeflags.doorsrando) {
+					notes.push('Doors/entrances rando: location logic is off - every check is shown as available');
 				}
 
 				function resolveSlot(slot) {
@@ -633,7 +651,8 @@
 					}
 				}
 
-				return generatedObjectives;
+				// Galeswift counts an objective listed twice in the flags only once
+				return generatedObjectives.filter((name, i, all) => all.indexOf(name) === i);
 			}
 
 			window.updateObjectivesList = function() {

@@ -196,3 +196,10 @@ Earlier "two-value" captures (1504->1610, 779->817) were single steps mid-sequen
   - `Knofree:package`: Rydia's Mom now unlocks on the Package (Galeswift swaps the D.Mist requirement), not the Mist Dragon.
   - Verified OK: Kmain, Ksummon/Kmoon (after restore), Knofree/:dwarf/:package visibility, Cnofree/Cnoearned/Ctreasure. No location effect: Kstart, Kvanilla, Kunsafe/er, Klatedark/Kunreliabledark, Kforce, Kunweighted, Cvanilla, Cmaybe, Cnopartner, Chi, Cfifo.
   - Not tracked by design: `Kmiab:*` (MIAB panel removed on purpose).
+
+## Galeswift flag audit fixes (2026-10-04, uncommitted)
+Full audit report: `..\Conversation Notes\2026-10-04 Galeswift flag audit report.md`. Fixed: classicgiant Giant char spot,
+-starting:underground / -starting:blackchocobo / doors+entrances rando logic (`applyStartModeGates()`), Xsmallparty,
+manual objective names (`GALESWIFT_OBJECTIVE_TEXT`) + de-dupe, Kvanilla Baron King/Fabul Defend.
+Backup: `..\Old revisions\Tracker v1.04.1 backup 2026-10-04` + git tag `backup-before-flag-audit-fixes`.
+Audit tooling (scratchpad, Galeswift generator in spoiler-only mode, one process per seed) can be re-run for future versions.

@@ -76,6 +76,9 @@ var modeflags = {
 	knofree: false,
 	knofreedwarf: false,
 	knofreepackage: false,
+	startunderground: false,
+	startblackchocobo: false,
+	doorsrando: false,
 	kforge: false,
 	kpink: false,
 	pshop: false,
@@ -179,7 +182,11 @@ var modeflags = {
 	xobjbonus: '',
 	xkicheckbonus: '',
 	xzonkbonus: '',
-	xmaxmulti: ''
+	xmaxmulti: '',
+	xsmallparty: false,
+	xmiabbonus: '',
+	xmoonbonus: '',
+	xmaxlevelbonus: false
 }
 
 // Pristine copies of the flag-derived state, restored at the start of every
@@ -1327,6 +1334,11 @@ function SetModes(overrideFlags) {
 					else if (xkey.startsWith('ZONKBONUS:')) modeflags.xzonkbonus = xkey.substring(10);
 					// Alpha 5.0 only: caps the final multiplier, e.g. Xmaxmulti:400 = 4.0x max.
 					else if (xkey.startsWith('MAXMULTI:')) modeflags.xmaxmulti = xkey.substring(9);
+					else if (xkey === 'SMALLPARTY') modeflags.xsmallparty = true;
+					// Per-fight bonuses: shown as a tooltip note only
+					else if (xkey.startsWith('MIABBONUS:')) modeflags.xmiabbonus = xkey.substring(10);
+					else if (xkey.startsWith('MOONBONUS:')) modeflags.xmoonbonus = xkey.substring(10);
+					else if (xkey === 'MAXLEVELBONUS') modeflags.xmaxlevelbonus = true;
 				}
 			}
 
@@ -1413,7 +1425,16 @@ function SetModes(overrideFlags) {
 						// wants it later) but no longer used to gate anything.
 						modeflags.opushbtojump = true;
 						break;
+					case '-STARTING:UNDERGROUND':
+						modeflags.startunderground = true;
+						break;
+					case '-STARTING:BLACKCHOCOBO':
+						modeflags.startblackchocobo = true;
+						break;
 					default:
+						if (flagsets[fs].startsWith('-DOORSRANDO:') || flagsets[fs].startsWith('-ENTRANCESRANDO:')) {
+							modeflags.doorsrando = true;
+						}
 						if (flagsets[fs].startsWith('-VANILLA:')) {
 							var flagstring = flagsets[fs].substr(9).replace('/', ',');
 							var keys = flagstring.split(',');
@@ -1530,6 +1551,15 @@ function applyKSummonKMoonFlags() {
 
 	safeSetLocationState(KeyItemCheck.FORGE, modeflags.kforge ? 0 : 3);
 	safeSetLocationState(KeyItemCheck.PINK_TRADE, modeflags.kpink ? 0 : 3);
+
+	// Kvanilla (no K flags): key items stay at their vanilla spots (Galeswift
+	// core_rando.py VANILLA_ITEMS); Baron Castle [King] and Fabul [Defend]
+	// give non-key rewards there.
+	var kvanilla = !modeflags.kmain && !isMystery && typeof flags === 'string' && flags.length > 0;
+	[KeyItemCheck.BARON_KING, KeyItemCheck.FABUL_DEFEND].forEach(function (loc) {
+		if (kvanilla) safeSetLocationState(loc, 3);
+		else if (keyitemlocations[loc] === 3) keyitemlocations[loc] = 0;
+	});
 }
 
 function SetFlagOptions() {
@@ -1924,8 +1954,64 @@ function SetFlagOptions() {
 }
 
 
+// Baron Castle done (its reward spot is checked) = Enterprise under -starting:blackchocobo/underground.
+// Without that spot (e.g. Kvanilla) fall back to having the Baron Key.
+function hasEnterprise() {
+	var s = keyitemlocations[KeyItemCheck.BARON_KING];
+	if (s === 3) return keyitems[KeyItem.BARON_KEY] === true;
+	return s === 2 || s === 4;
+}
+
+// Extra unlock rules for flags that change the starting position or map
+// (Galeswift core_rando.py apply() / checker branches). Runs after the normal
+// rules, so it only ever locks spots further (or unlocks all, for doors rando).
+function applyStartModeGates() {
+	var K = KeyItemCheck, C = CharacterCheck;
+	var i;
+	if (modeflags.doorsrando) {
+		// Doors/entrances are shuffled - fixed logic doesn't apply, show every spot
+		for (i = 0; i < keyitemlocations.length; i++) {
+			if (i !== K.HOOK_ROUTE && i !== K.WARP_GLITCH) ActivateKeyItemLocation(i);
+		}
+		for (i = 0; i < characterlocations.length; i++) ActivateCharacterLocation(i);
+		DeactivateKeyItemLocation(K.HOOK_ROUTE);
+		return;
+	}
+	var enterprise = hasEnterprise();
+	var hookTrades = [K.ADAMANT, K.PINK_TRADE];
+	if (modeflags.startunderground) {
+		// The Drill takes the Hook's place and is what gets you above ground
+		var above = keyitems[KeyItem.HOOK] === true;
+		if (!above) {
+			[K.ADAMANT, K.PINK_TRADE, K.ANTLION, K.BARON_KING, K.BARON_ODIN, K.BARON_INN, K.FABUL_DEFEND,
+			 K.FABUL_SYLPH, K.FABUL_PAN, K.MAGNES, K.MIST, K.MT_ORDEALS, K.TOWER_ZOT, K.TOROIA, K.BAHAMUT,
+			 K.MOON_CRYSTAL, K.MOON_MASAMUNE, K.MOON_MURASAME, K.MOON_RIBBON, K.MOON_WHITE].forEach(DeactivateKeyItemLocation);
+			[C.BARON_CASTLE, C.BARON_INN, C.DAMCYAN, C.EBLAN_CAVE, C.GIANT_BABIL, C.KAIPO, C.MIST, C.MT_HOBS,
+			 C.MT_ORDEALS, C.MYSIDIA, C.TOWER_ZOT, C.WATERWAY, C.MOON].forEach(DeactivateCharacterLocation);
+		}
+		if (!enterprise) {
+			hookTrades.forEach(DeactivateKeyItemLocation);
+			DeactivateCharacterLocation(C.EBLAN_CAVE);
+		}
+		DeactivateKeyItemLocation(K.HOOK_ROUTE); // no Hook route when starting underground
+	} else if (modeflags.startblackchocobo) {
+		if (!enterprise) {
+			hookTrades.forEach(DeactivateKeyItemLocation);
+			DeactivateCharacterLocation(C.EBLAN_CAVE);
+			if (mist !== true) DeactivateKeyItemLocation(K.ANTLION);
+		}
+	}
+}
+
 function ApplyChecks(){
 	var hasunderworldaccess = (keyitems[KeyItem.MAGMA_KEY] === true || ((keyitems[KeyItem.HOOK] === true) && hookclear === true));
+	// Galeswift core_rando.py: -starting:underground drops every underworld requirement;
+	// -starting:blackchocobo needs the Enterprise (Baron Castle) before Magma or Hook routes.
+	if (modeflags.startunderground) {
+		hasunderworldaccess = true;
+	} else if (modeflags.startblackchocobo) {
+		hasunderworldaccess = hasunderworldaccess && hasEnterprise();
+	}
 
 	// ****Key Items****
 	if (disableloctracker === '0') {
@@ -2146,7 +2232,8 @@ function ApplyChecks(){
 		// kept showing as available once the Darkness Crystal was obtained
 		// even on Cnogiant seeds. Fixed: treat it the same as an empty earned
 		// spot (force hidden).
-		if (earnedCharacterSpotsEmpty() || modeflags.cnogiant) {
+		// Omode:classicgiant removes the Giant character slot (Galeswift character_rando.py)
+		if (earnedCharacterSpotsEmpty() || modeflags.cnogiant || modeflags.ogiant) {
 			if (characterlocations[CharacterCheck.GIANT_BABIL] !== 2) characterlocations[CharacterCheck.GIANT_BABIL] = 3;
 		} else {
 			DeactivateCharacterLocation(CharacterCheck.GIANT_BABIL);
@@ -2234,6 +2321,8 @@ function ApplyChecks(){
 		}	
 
 	
+		applyStartModeGates();
+
 		// ****Towns/Shops****
 
 		//Agart
@@ -3358,6 +3447,23 @@ function computeXPModifier(itemcount) {
 		}
 	}
 
+	// Xsmallparty (experience_acceleration.f4c small_party): with E empty party
+	// slots and max party size N, the bonus is sum(A for A = 6-N .. E) x 10%.
+	if (modeflags.xsmallparty && window.trackerPartySlots) {
+		var maxParty = parseInt(modeflags.climit) || 5;
+		var empty = window.trackerPartySlots.filter(function (s) { return s < 0; }).length;
+		var steps = 0;
+		for (var a = 6 - maxParty; a < empty + 1; a++) steps += a;
+		multiplier *= 1 + steps / 10;
+		parts.push('+' + (steps * 10) + '% small party (' + empty + ' empty slot' + (empty === 1 ? '' : 's') + ')');
+	}
+
+	var situational = [];
+	if (modeflags.xmiabbonus) situational.push('MIAB fights x' + (parseInt(modeflags.xmiabbonus) / 100 + 1));
+	if (modeflags.xmoonbonus) situational.push('moon fights x' + (parseInt(modeflags.xmoonbonus) / 100 + 1));
+	if (modeflags.xmaxlevelbonus) situational.push('+20% per 5-level deficit vs the enemies');
+	if (situational.length) parts.push('Not included (per fight): ' + situational.join(', '));
+
 	var maxMulti = parseInt(modeflags.xmaxmulti);
 	if (maxMulti > 0 && multiplier > maxMulti / 100) {
 		multiplier = maxMulti / 100;
@@ -3401,6 +3507,101 @@ function UnhighlightClear(partySlot) {
 
 function showautotrackingstatus() {
 	document.getElementById('autotrackingdiv').innerHTML = autotrackingmessage;
+}
+
+// Galeswift's own objective text by slug (FreeEnt/objective_data.py OBJECTIVES, v4.7.0),
+// i.e. exactly what the game shows. Used for manual-mode objective names.
+var GALESWIFT_OBJECTIVE_TEXT = {
+	"boss_antlion": "Defeat Antlion",
+	"boss_asura": "Defeat Asura",
+	"boss_bahamut": "Defeat Bahamut",
+	"boss_baigan": "Defeat Baigan",
+	"boss_calbrena": "Defeat Calbrena",
+	"boss_cpu": "Defeat CPU",
+	"boss_darkelf": "Defeat the Dark Elf (dragon form)",
+	"boss_darkimp": "Defeat the Dark Imps (boss)",
+	"boss_dlunar": "Defeat the D.Lunars",
+	"boss_dmist": "Defeat D.Mist",
+	"boss_elements": "Defeat Elements",
+	"boss_evilwall": "Defeat EvilWall",
+	"boss_fabulgauntlet": "Defeat the Fabul Gauntlet",
+	"boss_golbez": "Defeat Golbez",
+	"boss_guard": "Defeat the Guards (boss)",
+	"boss_kainazzo": "Defeat Kainazzo",
+	"boss_karate": "Defeat Karate",
+	"boss_kingqueen": "Defeat K.Eblan and Q.Eblan",
+	"boss_leviatan": "Defeat Leviatan",
+	"boss_lugae": "Defeat Dr. Lugae",
+	"boss_magus": "Defeat the Magus Sisters",
+	"boss_milon": "Defeat Milon",
+	"boss_milonz": "Defeat Milon Z.",
+	"boss_mirrorcecil": "Defeat D.Knight",
+	"boss_mombomb": "Defeat MomBomb",
+	"boss_octomamm": "Defeat Octomamm",
+	"boss_odin": "Defeat Odin",
+	"boss_officer": "Defeat Officer",
+	"boss_ogopogo": "Defeat Ogopogo",
+	"boss_paledim": "Defeat Pale Dim",
+	"boss_plague": "Defeat Plague",
+	"boss_rubicant": "Defeat Rubicant",
+	"boss_valvalis": "Defeat Valvalis",
+	"boss_waterhag": "Defeat Waterhag (boss version)",
+	"boss_wyvern": "Defeat Wyvern",
+	"char_cecil": "Get Cecil",
+	"char_cid": "Get Cid",
+	"char_edge": "Get Edge",
+	"char_edward": "Get Edward",
+	"char_fusoya": "Get FuSoYa",
+	"char_kain": "Get Kain",
+	"char_palom": "Get Palom",
+	"char_porom": "Get Porom",
+	"char_rosa": "Get Rosa",
+	"char_rydia": "Get Rydia",
+	"char_tellah": "Get Tellah",
+	"char_yang": "Get Yang",
+	"quest_antlionnest": "Complete the Antlion Nest",
+	"quest_baronbasement": "Defeat the Baron Castle basement throne",
+	"quest_baroncastle": "Liberate Baron Castle",
+	"quest_baroninn": "Defeat the bosses of Baron Inn",
+	"quest_bigwhale": "Raise the Big Whale",
+	"quest_burnmist": "Burn village Mist with the Package",
+	"quest_cavebahamut": "Complete Cave Bahamut",
+	"quest_crystalaltar": "Conquer the vanilla Crystal Sword altar",
+	"quest_curefever": "Cure the fever with the SandRuby",
+	"quest_dwarfcastle": "Defeat the bosses of Dwarf Castle",
+	"quest_fabul": "Defend Fabul",
+	"quest_falcon": "Launch the Falcon",
+	"quest_forge": "Have Kokkol forge Legend Sword with Adamant",
+	"quest_giant": "Complete the Giant of Bab-il",
+	"quest_hobs": "Rescue the hostage on Mt. Hobs",
+	"quest_lowerbabil": "Defeat the boss of Lower Bab-il",
+	"quest_magma": "Drop the Magma Key into the Agart well",
+	"quest_magnes": "Complete Cave Magnes",
+	"quest_masamunealtar": "Conquer the vanilla Masamune altar",
+	"quest_mistcave": "Defeat the boss of the Mist Cave",
+	"quest_monsterking": "Defeat the king at the Town of Monsters",
+	"quest_monsterqueen": "Defeat the queen at the Town of Monsters",
+	"quest_murasamealtar": "Conquer the vanilla Murasame altar",
+	"quest_music": "Break Dark Elf's spell with the TwinHarp",
+	"quest_ordeals": "Complete Mt. Ordeals",
+	"quest_pass": "Unlock the Pass door in Toroia",
+	"quest_ribbonaltar": "Conquer the vanilla Ribbon room",
+	"quest_sealedcave": "Complete the Sealed Cave",
+	"quest_supercannon": "Destroy the Super Cannon",
+	"quest_toroiatreasury": "Open the Toroia treasury with the Earth Crystal",
+	"quest_tradepan": "Return the Pan to Yang's wife",
+	"quest_tradepink": "Trade away the Pink Tail",
+	"quest_traderat": "Trade away the Rat Tail",
+	"quest_unlocksealedcave": "Unlock the Sealed Cave",
+	"quest_unlocksewer": "Unlock the sewer with the Baron Key",
+	"quest_wakeyang": "Wake Yang with the Pan",
+	"quest_waterfall": "Defeat the boss of the Waterfall",
+	"quest_whitealtar": "Conquer the vanilla White Spear altar",
+	"quest_zot": "Complete the Tower of Zot"
+};
+
+function galeswiftObjectiveText(slug) {
+	return GALESWIFT_OBJECTIVE_TEXT[String(slug || '').toLowerCase()] || null;
 }
 
 function formatObjectiveName(objName) {

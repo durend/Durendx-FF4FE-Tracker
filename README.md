@@ -224,6 +224,44 @@ Comprehensive support for FF4FE flags including:
 
 - Added boss name tooltips - hover over any boss icon to see its full name
 
+## Changes (v1.04.2)
+
+Every Galeswift 4.7.0 flag (all 1,540) and 443 flag combinations, including
+all official presets, were checked against Galeswift's own seed generator.
+The tracker had no errors on any of them; these were the mismatches found
+and fixed:
+
+- `Omode:classicgiant` (Giant% presets): the Giant of Bab-il character spot is
+  now hidden - that mode always removes it
+- `-starting:underground` is now recognized: underworld checks are open from
+  the start, surface checks need the Drill (it takes the Hook's place, so mark
+  the Hook when you get it), and the Adamant Cave trades and Cave Eblan need
+  the Enterprise
+- `-starting:blackchocobo` is now recognized: the Magma Key / Hook routes to
+  the underworld, the Adamant Cave trades and Cave Eblan need the Enterprise,
+  and Antlion Cave needs the Mist Dragon (or the Enterprise)
+- `-doorsrando` / `-entrancesrando` are now recognized: since doors are
+  shuffled, the normal unlock logic can't apply, so every check is shown as
+  available
+- `Xsmallparty` now counts in the XP display (+10% steps for empty party
+  slots) and updates when your party changes. Per-fight bonuses
+  (`Xmiabbonus`, `Xmoonbonus`, `Xmaxlevelbonus`) are listed in the XP tooltip
+- Manual mode: objectives now use the game's exact wording (no more
+  "Baroninn"-style names when `Omode` is combined with other objectives), and
+  an objective listed twice in the flags only shows once
+- No K flags (vanilla key items): Baron Castle [King] and Fabul [Defend] are
+  no longer shown as key item checks
+- Seed Notes explain the starting mode and doors rando
+
+**Recommendations / known limits**
+- The `-starting` and doors rando rules follow Galeswift's logic but haven't
+  been played live yet. If something looks off on one of those seeds, please
+  report it
+- The tracker counts the Enterprise as obtained once **Baron Castle [King]**
+  is checked off. Auto-tracking does this when you finish Baron Castle; in
+  manual mode, click that check yourself
+- Doors rando: no routing help, since every check shows as available
+
 ## Changes (v1.04.1)
 
 Hotfix for check tracking and the Galeswift XP display.
@@ -414,5 +452,5 @@ For issues, questions, or feature requests:
 
 ---
 
-**Version**: 1.04.1
+**Version**: 1.04.2
 **Last Updated**: September 2026
