@@ -3,7 +3,7 @@ var keyitems = [false,false,false,false,false,false,false,false,false,false,fals
 var usedkeyitems = [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false];
 var bosses = [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false];
 
-var keyitemlocations = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+var keyitemlocations = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 var characterlocations = [0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 var townlocations = [0,0,0,0,0,0,0,0,0,0,0,0,0];
 var trappedchestlocations = [0,0,0,0,0,0,0,0,0,0];
@@ -76,6 +76,8 @@ var modeflags = {
 	knofree: false,
 	knofreedwarf: false,
 	knofreepackage: false,
+	kforge: false,
+	kpink: false,
 	pshop: false,
 	pkey: false,
 	pchests: false,
@@ -252,7 +254,7 @@ function SetModes(overrideFlags) {
 	}
 	
 	if (disableloctracker === '1') {
-		keyitemlocations = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1];
+		keyitemlocations = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1];
 		townlocations = [1,1,1,1,1,1,1,1,1,1,1,1,1];
 		characterlocations = [1,1,1,1,1,1,1,1,1,1,1,1,1,1];
 		trappedchestlocations = [1,1,1,1,1,1,1,1,1,1];
@@ -874,6 +876,9 @@ function SetModes(overrideFlags) {
 							// Alpha 5.0: Key items in character joins
 							modeflags.kchar = true;
 							break;
+						case 'PINK':
+							modeflags.kpink = true;
+							break;
 						case 'FORGE':
 							// Alpha 5.0: Key items in forge
 							modeflags.kforge = true;
@@ -1486,24 +1491,45 @@ function SetModes(overrideFlags) {
 	}
 }
 
-// Helper function to set summon/moon location states based on flags
-//
-// BUG FIXED (2026-09-30): this used to force these locations to state 3
-// ("hidden") whenever Ksummon/Kmoon was absent from the flags. But
-// Ksummon/Kmoon only mean "key items CAN be placed as summon-boss/moon-boss
-// rewards" (confirmed against the real Galeswift flagspec and the live
-// generator's uispec.js) - they say nothing about whether the location
-// itself is reachable. ApplyChecks() already has its own, more specific
-// gating for these exact locations (underworld access / Darkness Crystal
-// obtained), but ActivateKeyItemLocation() only ever transitions state 0->1
-// - once this function forced state 3, ApplyChecks()'s activation could
-// never take effect again for the rest of the session, for any seed that
-// doesn't set Ksummon/Kmoon (most seeds, since it's just one placement
-// option among several). Reproduced directly: obtaining the Darkness
-// Crystal correctly set keyitems[DARKNESS_CRYSTAL] but the Moon locations
-// stayed hidden regardless. Fix: stop force-hiding here and let
-// ApplyChecks() be the sole authority on these locations' visibility.
 function applyKSummonKMoonFlags() {
+	// Also covers Kforge / Kpink: those spots only hold key items under their flag
+	// Helper to set location state without overwriting completed (2) or grayed completed (4)
+	function safeSetLocationState(locationId, newState) {
+		if (keyitemlocations[locationId] !== 2 && keyitemlocations[locationId] !== 4) {
+			keyitemlocations[locationId] = newState;
+		}
+	}
+
+	if (!modeflags.ksummon) {
+		safeSetLocationState(KeyItemCheck.BARON_ODIN, 3); //Odin
+		safeSetLocationState(KeyItemCheck.FEY_ASURA, 3); //Asura
+		safeSetLocationState(KeyItemCheck.FEY_LEVIATHAN, 3); //Leva
+		safeSetLocationState(KeyItemCheck.SYLPH_CAVE, 3); //Slyph
+		safeSetLocationState(KeyItemCheck.BAHAMUT, 3); //Bahamut
+	} else {
+		safeSetLocationState(KeyItemCheck.BARON_ODIN, 0); //Odin
+		safeSetLocationState(KeyItemCheck.FEY_ASURA, 0); //Asura
+		safeSetLocationState(KeyItemCheck.FEY_LEVIATHAN, 0); //Leva
+		safeSetLocationState(KeyItemCheck.SYLPH_CAVE, 0); //Slyph
+		safeSetLocationState(KeyItemCheck.BAHAMUT, 0); //Bahamut
+	}
+
+	if (!modeflags.kmoon) {
+		safeSetLocationState(KeyItemCheck.MOON_CRYSTAL, 3); //Lunar Crystal
+		safeSetLocationState(KeyItemCheck.MOON_MASAMUNE, 3); //Lunar Masa
+		safeSetLocationState(KeyItemCheck.MOON_MURASAME, 3); //Lunar Mura
+		safeSetLocationState(KeyItemCheck.MOON_RIBBON, 3); //Lunar Ribbon
+		safeSetLocationState(KeyItemCheck.MOON_WHITE, 3); //Lunar White
+	} else {
+		safeSetLocationState(KeyItemCheck.MOON_CRYSTAL, 0); //Lunar Crystal
+		safeSetLocationState(KeyItemCheck.MOON_MASAMUNE, 0); //Lunar Masa
+		safeSetLocationState(KeyItemCheck.MOON_MURASAME, 0); //Lunar Mura
+		safeSetLocationState(KeyItemCheck.MOON_RIBBON, 0); //Lunar Ribbon
+		safeSetLocationState(KeyItemCheck.MOON_WHITE, 0); //Lunar White
+	}
+
+	safeSetLocationState(KeyItemCheck.FORGE, modeflags.kforge ? 0 : 3);
+	safeSetLocationState(KeyItemCheck.PINK_TRADE, modeflags.kpink ? 0 : 3);
 }
 
 function SetFlagOptions() {
@@ -1908,6 +1934,18 @@ function ApplyChecks(){
 		if (keyitems[KeyItem.HOOK] === true && keyitems[KeyItem.RAT_TAIL] === true) {
 			ActivateKeyItemLocation(KeyItemCheck.ADAMANT);
 		}
+
+		//Adamant Grotto [Pink Tail] - Kpink only (hidden otherwise)
+		DeactivateKeyItemLocation(KeyItemCheck.PINK_TRADE);
+		if (keyitems[KeyItem.HOOK] === true && keyitems[KeyItem.PINK_TAIL] === true) {
+			ActivateKeyItemLocation(KeyItemCheck.PINK_TRADE);
+		}
+
+		//Kokkol [Forge] - Kforge only (hidden otherwise)
+		DeactivateKeyItemLocation(KeyItemCheck.FORGE);
+		if (hasunderworldaccess && keyitems[KeyItem.ADAMANT] === true && keyitems[KeyItem.LEGEND] === true) {
+			ActivateKeyItemLocation(KeyItemCheck.FORGE);
+		}
 		
 		//Antlion Cave
 		ActivateKeyItemLocation(KeyItemCheck.ANTLION);
@@ -1950,7 +1988,7 @@ function ApplyChecks(){
 		
 		//Mist Village
 		DeactivateKeyItemLocation(KeyItemCheck.MIST);
-		if (mist === true) {
+		if (modeflags.knofreepackage ? keyitems[KeyItem.PACKAGE] === true : mist === true) {
 			ActivateKeyItemLocation(KeyItemCheck.MIST);
 		}	
 
@@ -3213,6 +3251,17 @@ var objectivesTotalCount = 0;
 var xpLastLive = null;
 var lastXPItemcount;
 
+// Galeswift's own XP counters, read live when auto-tracking (see
+// tracking_interface.js); null = not available, fall back to estimates.
+var xpGameCounters = null;
+
+function setXPGameCounters(kiObtained, kiChecks, zonks) {
+	var c = xpGameCounters;
+	if (c && c.kiObtained === kiObtained && c.kiChecks === kiChecks && c.zonks === zonks) return;
+	xpGameCounters = { kiObtained: kiObtained, kiChecks: kiChecks, zonks: zonks };
+	updateXPModifier(lastXPItemcount);
+}
+
 // mult1000 = multiplier x1000, as the game stores it at $7E00AA.
 function setLiveXPMultiplier(mult1000) {
 	xpLastLive = mult1000 / 1000;
@@ -3252,10 +3301,12 @@ function computeXPModifier(itemcount) {
 
 	var multiplier = 1;
 	var parts = [];
+	var c = xpGameCounters;
 
 	if (!modeflags.oexpnokeybonus) {
-		if (itemcount >= 10) multiplier *= 2;
-		parts.push('x2 at 10 key items (' + itemcount + '/10)');
+		var kiObtained = c ? c.kiObtained : itemcount;
+		if (kiObtained >= 10) multiplier *= 2;
+		parts.push('x2 at 10 key items (' + kiObtained + '/10)');
 	}
 
 	if (modeflags.xcrystalbonus) {
@@ -3263,33 +3314,47 @@ function computeXPModifier(itemcount) {
 		parts.push('x2 once the Crystal is obtained');
 	}
 
-	var kiBonus = parseInt(modeflags.xkicheckbonus);
-	if (kiBonus > 0) {
-		var gained = itemcount + ((modeflags.pkey && keyitems[KeyItem.PASS] === true) ? 1 : 0);
-		multiplier *= 1 + Math.max(0, gained - 1) * kiBonus / 100;
-		parts.push('+' + kiBonus + '% per key item after the starting one');
+	// Same order and divisors as Galeswift's experience_acceleration.f4c:
+	// each bonus is exp += floor(count * exp / divisor), divisor = 100 // N.
+	if (modeflags.xobjbonus) {
+		var objDiv = modeflags.xobjbonus === 'num'
+			? objectivesTotalCount
+			: Math.floor(100 / parseInt(modeflags.xobjbonus));
+		if (objDiv > 0) {
+			multiplier *= 1 + objectivesCompletedCount / objDiv;
+			parts.push('+' + (100 / objDiv).toFixed(1).replace(/\.0$/, '') + '% per completed objective (' + objectivesCompletedCount + '/' + objectivesTotalCount + ')');
+		}
 	}
 
-	if (modeflags.xobjbonus) {
-		var objBonus = modeflags.xobjbonus === 'num'
-			? (objectivesTotalCount > 0 ? 100 / objectivesTotalCount : 0)
-			: parseInt(modeflags.xobjbonus);
-		if (objBonus > 0) {
-			multiplier *= 1 + objectivesCompletedCount * objBonus / 100;
-			parts.push('+' + objBonus.toFixed(1).replace(/\.0$/, '') + '% per completed objective (' + objectivesCompletedCount + '/' + objectivesTotalCount + ')');
+	var kiBonus = parseInt(modeflags.xkicheckbonus);
+	if (kiBonus > 0) {
+		var kiDiv = Math.floor(100 / kiBonus);
+		var kiSteps;
+		if (c) {
+			kiSteps = Math.max(0, c.kiChecks - 1);
+		} else {
+			var gained = itemcount + ((modeflags.pkey && keyitems[KeyItem.PASS] === true) ? 1 : 0);
+			kiSteps = Math.max(0, gained - 1);
 		}
+		multiplier *= 1 + kiSteps / kiDiv;
+		parts.push('+' + kiBonus + '% per key item check after the starting one (' + kiSteps + (c ? '' : ', estimated') + ')');
 	}
 
 	var zonkBonus = parseInt(modeflags.xzonkbonus);
-	if (zonkBonus > 0 && typeof keyitemlocations !== 'undefined') {
-		var checksCleared = 0;
-		for (var kl = 0; kl < keyitemlocations.length; kl++) {
-			if (keyitemlocations[kl] === 2 || keyitemlocations[kl] === 4) checksCleared++;
+	if (zonkBonus > 0) {
+		var zonkCount = 0;
+		if (c) {
+			zonkCount = c.zonks;
+		} else if (typeof keyitemlocations !== 'undefined') {
+			var checksCleared = 0;
+			for (var kl = 0; kl < keyitemlocations.length; kl++) {
+				if (keyitemlocations[kl] === 2 || keyitemlocations[kl] === 4) checksCleared++;
+			}
+			zonkCount = Math.max(0, checksCleared - itemcount);
 		}
-		var zonkCount = Math.max(0, checksCleared - itemcount);
 		if (zonkCount > 0) {
-			multiplier *= 1 + zonkCount * zonkBonus / 100;
-			parts.push('+' + zonkBonus + '% per zonk (~' + zonkCount + ')');
+			multiplier *= 1 + zonkCount / Math.floor(100 / zonkBonus);
+			parts.push('+' + zonkBonus + '% per zonk (' + zonkCount + (c ? '' : ', estimated') + ')');
 		}
 	}
 

@@ -186,3 +186,13 @@ Game state at that moment: 2 key items held, check slots 0x20-0x23 set, 2 object
 `$7E1579`=07 (unknown stat next to Stats_Bosses, also 7). The x1.14 step = 7 x 2% -> kicheck count source unknown.
 Plan: read the exact bonus code in Galeswift's public source, then verify against a capture like the above.
 Earlier "two-value" captures (1504->1610, 779->817) were single steps mid-sequence, not base->final.
+
+## v1.04.1 work in progress (2026-10-04, uncommitted)
+- **Galeswift XP fixed:** reads the game's own counters - `$7E1630` Rewards__KeyItemChecksCount, `$7E1631` Rewards__ZonkChecksCount, `$7E1578` Stats_KeyItems (x2-at-10 uses this, not held items) - from galeswift/FreeEnt scripts/rewards.f4c + stats.f4c. Formula mirrors scripts/experience_acceleration.f4c: order nokey x2, crystal x2, objectives, kicheck (count-1), zonk; each step exp += floor(count*exp/div), div = 100 // N. Last night's capture now computes 1.37x (game 1.379x). Polled every 0.5s on non-v5 seeds with Xkicheckbonus/Xzonkbonus; value accepted after 2 matching reads. Falls back to the old estimate without auto-tracking. KIChecks counter goes up by 2 per check on hardware - doesn't matter, it's what the game uses. Not handled: starting-item-was-a-zonk case (assumes starting item is a KI), Xkicheckbonus:num, Xsplit/Xmaxlevelbonus/Xsmallparty/Xmiabbonus/Xmoonbonus/Xgeometric.
+- **REGRESSION from v1.03.2 fixed:** v1.03.2 emptied `applyKSummonKMoonFlags()` on a wrong reading of Ksummon/Kmoon. Without those flags, summon/moon spots give their normal rewards and are NOT key item checks - the original hiding was correct. Restored the pre-v1.03.2 function. persistence.js now re-runs it after restoring a save (old saves had the spots visible). Confirmed live by the user on a Kmain-only seed.
+- xptest.py: added 3 live-counter cases (incl. the real capture) - 13/13 pass.
+- **Check-flag audit vs Galeswift source (core_rando.py ITEM_SLOTS / slot tiers, rewards.py RewardSlot):**
+  - Added `Kforge` spot "Kokkol [Forge]" (slot 0x5B, KeyItemCheck.FORGE=30; needs underworld + Adamant + Legend) and `Kpink` spot "Adamant Cave [Pink Tail]" (slot 0x5C, PINK_TRADE=31; needs Hook + Pink Tail). `Kpink` wasn't parsed at all before. Both hidden unless their flag is on (in applyKSummonKMoonFlags, so old saves are re-checked).
+  - `Knofree:package`: Rydia's Mom now unlocks on the Package (Galeswift swaps the D.Mist requirement), not the Mist Dragon.
+  - Verified OK: Kmain, Ksummon/Kmoon (after restore), Knofree/:dwarf/:package visibility, Cnofree/Cnoearned/Ctreasure. No location effect: Kstart, Kvanilla, Kunsafe/er, Klatedark/Kunreliabledark, Kforce, Kunweighted, Cvanilla, Cmaybe, Cnopartner, Chi, Cfifo.
+  - Not tracked by design: `Kmiab:*` (MIAB panel removed on purpose).

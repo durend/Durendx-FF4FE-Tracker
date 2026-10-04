@@ -420,6 +420,29 @@ function tracking_interface() {
            // 4.7 writes the same signature and Exp but leaves junk (1280) in the
            // multiplier slot, so this stays v5-only.
            xpPollCounter++;
+           // Galeswift XP counters (scripts/rewards.f4c, stats.f4c): $7E1630 =
+           // Rewards__KeyItemChecksCount, $7E1631 = Rewards__ZonkChecksCount,
+           // $7E1578 = Stats_KeyItems (already in this block at 0x78).
+           const galeXPFlags = typeof modeflags !== 'undefined' && (modeflags.xkicheckbonus || modeflags.xzonkbonus);
+           if (!module.objectiveGroupsV5 && galeXPFlags && xpPollCounter >= 5) {
+             xpPollCounter = 0;
+             const statsKeyItems = memory[0x78];
+             module.network.snes.send(JSON.stringify({
+               "Opcode" : "GetAddress",
+               "Space" : "SNES",
+               "Operands": ["0xF51630", "2"]
+             })).then(
+               (ev) => ev.data.arrayBuffer()
+             ).then(
+               (buf) => {
+                 let r = new Uint8Array(buf);
+                 if (r.length < 2 || typeof setXPGameCounters !== 'function') return;
+                 const key = statsKeyItems + ',' + r[0] + ',' + r[1];
+                 if (module._galeXPLast === key) setXPGameCounters(statsKeyItems, r[0], r[1]);
+                 module._galeXPLast = key;
+               }
+             ).catch(() => {});
+           }
            if (module.objectiveGroupsV5 && xpPollCounter >= 5) {
              xpPollCounter = 0;
              module.network.snes.send(JSON.stringify({

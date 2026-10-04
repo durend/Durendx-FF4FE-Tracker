@@ -66,6 +66,8 @@ var TrackerSave = (function () {
     copyInto(usedkeyitems, s.usedkeyitems);
     copyInto(characters, s.characters);
     copyInto(keyitemlocations, s.keyitemlocations);
+    // re-hide summon/moon spots the flags rule out (older saves may have them visible)
+    if (typeof applyKSummonKMoonFlags === 'function') applyKSummonKMoonFlags();
     copyInto(characterlocations, s.characterlocations);
     copyInto(townlocations, s.townlocations);
     copyInto(trappedchestlocations, s.trappedchestlocations);

@@ -1,10 +1,10 @@
 <html>
 	<body bgcolor="#000063">
 		<head>
-			<title>FFIV Free Enterprise Tracker v1.04 - By Durendx</title>
+			<title>FFIV Free Enterprise Tracker v1.04.1 - By Durendx</title>
 			<link rel="stylesheet" href="./styles/stylesheet.css?v=2316">
 			<link rel="stylesheet" href="./styles/tracker_v2.css?v=2404">
-			<script src="./scripts/enums.js?v=2405"></script>
+			<script src="./scripts/enums.js?v=2406"></script>
 			<script src="./scripts/items.js?v=2316"></script>
 			<script type="text/javascript">
 			// Initialize tracker disable flags BEFORE track.js loads
@@ -16,7 +16,7 @@
 			var disableobjectivetracker = '0';
 			var disablecharacterstracker = '0';  // Character locations tracker
 			</script>
-			<script src="./scripts/track.js?v=2408"></script>
+			<script src="./scripts/track.js?v=2411"></script>
 			<script type="text/javascript" src="./scripts/jquery-3.3.1.js"></script>
 			<script type="text/javascript" src="./scripts/jquery.powertip.js"></script>
 			<link rel="stylesheet" type="text/css" href="./styles/jquery.powertip.css" />
@@ -25,8 +25,8 @@
 			<script src="./scripts/rom-metadata.js?v=2403"></script>
 			<script src="./scripts/objectives.js?v=2403"></script>
 			<script src="./scripts/objectives-v5.js?v=1"></script>
-			<script src="./scripts/tracking_interface.js?v=2413"></script>
-			<script src="./scripts/persistence.js?v=2410"></script>
+			<script src="./scripts/tracking_interface.js?v=2414"></script>
+			<script src="./scripts/persistence.js?v=2411"></script>
 
 			<script type="text/javascript">
 			let ti = new tracking_interface();
@@ -81,7 +81,9 @@
 				0x0039: KeyItemCheck.MOON_RIBBON,
 				0x003A: KeyItemCheck.MOON_RIBBON,
 				0x0038: KeyItemCheck.MOON_WHITE,
-				0x005F: KeyItemCheck.DWARF_HOSPITAL
+				0x005F: KeyItemCheck.DWARF_HOSPITAL,
+				0x005B: KeyItemCheck.FORGE,
+				0x005C: KeyItemCheck.PINK_TRADE
 			}
 
 			let character_location_map = {
@@ -1614,6 +1616,7 @@
 			const locations = [
 				// OVERWORLD (alphabetical)
 				['Adamant Cave', 0, 'world-overworld'],
+				['Adamant Cave [Pink Tail]', 31, 'world-overworld'],
 				['Antlion Cave', 1, 'world-overworld'],
 				['Baron Castle [King]', 2, 'world-overworld'],
 				['Baron Castle [Odin]', 3, 'world-overworld'],
@@ -1629,6 +1632,7 @@
 				// UNDERWORLD (alphabetical)
 				['Dwarf Castle [Luca]', 13, 'world-underworld'],
 				['Dwarf Castle [Cid]', 29, 'world-underworld'],
+				['Kokkol [Forge]', 30, 'world-underworld'],
 				['Fabul [Sheila/Pan]', 7, 'world-underworld'],
 				['Fabul [Sheila/Sylph]', 6, 'world-underworld'],
 				['Feymarch [Asura]', 15, 'world-underworld'],

@@ -224,6 +224,25 @@ Comprehensive support for FF4FE flags including:
 
 - Added boss name tooltips - hover over any boss icon to see its full name
 
+## Changes (v1.04.1)
+
+Hotfix for check tracking and the Galeswift XP display.
+
+- Fixed summon spots (Baron Odin, Feymarch Asura/Leviathan, Sylph Cave,
+  Bahamut) and the 5 Lunar spots showing as key item checks on seeds without
+  `Ksummon` / `Kmoon`. Without those flags these spots never hold key items.
+  This was introduced in v1.03.2; saved progress from affected versions is
+  cleaned up automatically
+- Added the **Kokkol [Forge]** check for `Kforge` and the
+  **Adamant Cave [Pink Tail]** check for `Kpink`. Both auto-track and only
+  appear when their flag is on (`Kpink` wasn't recognized at all before)
+- `Knofree:package`: Rydia's Mom now becomes available once you have the
+  Package, instead of after defeating the Mist Dragon
+- Galeswift XP display now matches the game: with auto-tracking it reads the
+  game's own key item check and zonk counters for `Xkicheckbonus` /
+  `Xzonkbonus`, and the "x2 at 10 key items" bonus uses the game's key item
+  count. Without auto-tracking it's still an estimate
+
 ## Changes (v1.04)
 
 **Free Enterprise Alpha 5.0 support** (seeds from alpha.ff4fe.com, `v5.0.0-a.x`).
@@ -395,5 +414,5 @@ For issues, questions, or feature requests:
 
 ---
 
-**Version**: 1.04
+**Version**: 1.04.1
 **Last Updated**: September 2026

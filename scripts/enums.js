@@ -65,6 +65,8 @@ const KeyItemCheck = {
     HOOK_ROUTE: 27,
     WARP_GLITCH: 28,
     DWARF_HOSPITAL: 29, // Cid in the Dwarf Castle hospital (Knofree:dwarf free key item)
+    FORGE: 30,          // Kokkol's forged item (Kforge)
+    PINK_TRADE: 31,     // Pink Tail trade at the Adamant Grotto (Kpink)
 };
 const Town = {
     AGART: 0,
